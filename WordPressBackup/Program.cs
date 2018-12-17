@@ -20,6 +20,21 @@ namespace WordPressBackup
             FoldersToProcess = int.MaxValue;
         }
 
+        /// <summary>
+        /// Polly Policy. This will retry on an error using an exponential backoff.
+        /// 
+        /// Use like so:
+        ///   RetryPolicy.Execute(() => { /* code goes here */ });
+        /// </summary>
+        public Policy RetryPolicy { get; private set; }
+
+        /// <summary>
+        /// Async Polly Policy. This will retry on an error using an exponential backoff.
+        /// 
+        /// Use like so:
+        ///   RetryPolicyAsync.ExecuteAsync(() => { /* code goes here */ });        /// </summary>
+        public Policy RetryPolicyAsync { get; private set; }
+
         [Option("-folders", CommandOptionType.SingleValue,
             Description = @"This is for Debugging ONLY. The number of folders to look in on the ftp site.")]
         public int FoldersToProcess { get; set; }
@@ -72,7 +87,6 @@ namespace WordPressBackup
             Description = @"The password for the database")]
         public string MySqlPassword { get; set; }
 
-
         static void Main(string[] args) 
         {
             CommandLineApplication.Execute<Program>(args);
@@ -85,6 +99,11 @@ namespace WordPressBackup
             bool isInputsValid = true;
 
             //Validate and Echo back parameters
+            if (FoldersToProcess != int.MaxValue)
+            {
+                Write($"TESTING MODE: only downloading {FoldersToProcess} folders.", ConsoleColor.Blue);
+            }
+
             if (Retrys == -1)
             {
                 Retrys = 5;
@@ -163,6 +182,20 @@ namespace WordPressBackup
             {
                 Write($"Creating Backup {BackupFile}!", ConsoleColor.Green);
 
+                RetryPolicy = Policy
+                  .Handle<Exception>()
+                  .WaitAndRetry(
+                      Retrys,
+                      (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
+                      (exception, timeSpan, retryCount, context) => Write($"Retry {retryCount} : {exception.Message}", ConsoleColor.Red));
+
+                RetryPolicyAsync = Policy
+                  .Handle<Exception>()
+                  .WaitAndRetryAsync(
+                      Retrys,
+                      (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
+                      (exception, timeSpan, retryCount, context) => Write($"Retry {retryCount} : {exception.Message}", ConsoleColor.Red));
+
                 BackupApplication().Wait();
                 BackupDatabase();
                 ZipBackup();
@@ -176,44 +209,6 @@ namespace WordPressBackup
             Console.WriteLine($"{BackupFile} Done in {stopwatch.Elapsed:c}!");
         }
 
-
-        /// <summary>
-        /// Polly Policy. This will retry on an error using an exponential backoff.
-        /// 
-        /// Use like so:
-        ///   GetRetryPolicy().Execute(() => { /* code goes here */ });
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        private Policy GetRetryPolicy()
-        {
-            return Policy
-              .Handle<Exception>()
-              .WaitAndRetry(
-                  Retrys,
-                  (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
-                  (exception, timeSpan, retryCount, context) => Write($"Retry {retryCount} : {exception.Message}", ConsoleColor.Red));
-        }
-
-
-        /// <summary>
-        /// Async Polly Policy. This will retry on an error using an exponential backoff.
-        /// 
-        /// Use like so:
-        ///   GetRetryPolicyAsync().ExecuteAsync(() => { /* code goes here */ });
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        private Policy GetRetryPolicyAsync()
-        {
-            return Policy
-              .Handle<Exception>()
-              .WaitAndRetryAsync(
-                  Retrys,
-                  (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
-                  (exception, timeSpan, retryCount, context) => Write($"Retry {retryCount} : {exception.Message}", ConsoleColor.Red));
-        }
-
         /// <summary>
         /// Zip up the folder contating the DB and Application backups
         /// </summary>
@@ -221,7 +216,7 @@ namespace WordPressBackup
         {
             var file = Path.Combine(BackupWorkingDirectory, BackupFile + ".zip");
 
-            GetRetryPolicy().Execute(() =>
+            RetryPolicy.Execute(() =>
             {
                 Write($"Starting Backup Compression", ConsoleColor.Yellow);
 
@@ -247,7 +242,7 @@ namespace WordPressBackup
             var constring = $"server={MySqlServer};user={MySqlUser};pwd={MySqlPassword};database={MySqlDatabase};charset=utf8;convertzerodatetime=true;";
             var file = Path.Combine(BackupFolder, "db.sql");
 
-            GetRetryPolicy().Execute(() => {
+            RetryPolicy.Execute(() => {
 
                 Write($"Starting Database Backup", ConsoleColor.Yellow);
 
@@ -302,7 +297,7 @@ namespace WordPressBackup
                 var currentFolderLocal = FtpLocal + currentFolderRemote.Substring(remotelen);
                 var filesInRemote = new List<string>();
 
-                await GetRetryPolicyAsync().ExecuteAsync(async () =>
+                await RetryPolicyAsync.ExecuteAsync(async () =>
                 {
                     // Create the local clone of a sub folder if needed
                     if (!Directory.Exists(currentFolderLocal))
@@ -353,7 +348,7 @@ namespace WordPressBackup
         {
             if (files.Any())
             {
-                await GetRetryPolicyAsync().ExecuteAsync(async () =>
+                await RetryPolicyAsync.ExecuteAsync(async () =>
                 {
                     using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
                     {
