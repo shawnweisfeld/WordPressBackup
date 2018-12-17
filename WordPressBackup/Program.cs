@@ -19,8 +19,7 @@ namespace WordPressBackup
     {
         public Program()
         {
-            Retrys = "-1";
-            FoldersToProcess = int.MaxValue.ToString();
+            
         }
 
         /// <summary>
@@ -35,17 +34,49 @@ namespace WordPressBackup
         /// Async Polly Policy. This will retry on an error using an exponential backoff.
         /// 
         /// Use like so:
-        ///   RetryPolicyAsync.ExecuteAsync(() => { /* code goes here */ });        /// </summary>
+        ///   RetryPolicyAsync.ExecuteAsync(() => { /* code goes here */ });        
+        /// </summary>
         public Policy RetryPolicyAsync { get; private set; }
 
         [Option("-folders", CommandOptionType.SingleValue,
-            Description = @"This is for Debugging ONLY. The number of folders to look in on the ftp site.")]
-        public string FoldersToProcess { get; set; }
+            Description = @"OPTIONAL: This is for Debugging ONLY. The number of folders to look in on the ftp site.")]
+        public string FoldersToProcessString { get; set; }
+
+        public int FoldersToProcess
+        {
+            get
+            {
+                var tmp = 0;
+                if (int.TryParse(FoldersToProcessString, out tmp))
+                {
+                    return tmp;
+                }
+                else
+                {
+                    return int.MaxValue;
+                }
+            }
+        }
 
         [Option("-retrys", CommandOptionType.SingleValue,
             Description = @"In the event of a temporal issue with the backup, how often should we retry (Default = 5).")]
-        public string Retrys { get; set; }
-
+        public string RetrysString { get; set; }
+        public int Retrys
+        {
+            get
+            {
+                var tmp = 0;
+                if (int.TryParse(FoldersToProcessString, out tmp))
+                {
+                    return tmp;
+                }
+                else
+                {
+                    return 5;
+                }
+            }
+        }
+        
         [Option("-file", CommandOptionType.SingleValue,
             Description = @"The backup file name to use.")]
         public string BackupFile { get; set; }
@@ -110,19 +141,13 @@ namespace WordPressBackup
             stopwatch.Start();
             bool isInputsValid = true;
 
-            int folderstoprocess = 0;
             //Validate and Echo back parameters
-            if (int.TryParse(FoldersToProcess, out folderstoprocess) && folderstoprocess != int.MaxValue)
+            if (FoldersToProcess != int.MaxValue)
             {
                 Write($"TESTING MODE: only downloading {FoldersToProcess} folders.", ConsoleColor.Blue);
             }
 
-            int retrys = -1;
-            if (int.TryParse(Retrys, out retrys) && retrys == -1)
-            {
-                retrys = 5;
-            }
-            Write($"On Error Retrys: {retrys}", ConsoleColor.Blue);
+            Write($"On Error Retrys: {Retrys}", ConsoleColor.Blue);
 
             Write($"File: {BackupFile}", ConsoleColor.Blue);
 
@@ -216,14 +241,14 @@ namespace WordPressBackup
                 RetryPolicy = Policy
                   .Handle<Exception>()
                   .WaitAndRetry(
-                      retrys,
+                      Retrys,
                       (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
                       (exception, timeSpan, retryCount, context) => Write($"Retry {retryCount} : {exception.Message}", ConsoleColor.Red));
 
                 RetryPolicyAsync = Policy
                   .Handle<Exception>()
                   .WaitAndRetryAsync(
-                      retrys,
+                      Retrys,
                       (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
                       (exception, timeSpan, retryCount, context) => Write($"Retry {retryCount} : {exception.Message}", ConsoleColor.Red));
 
@@ -343,11 +368,8 @@ namespace WordPressBackup
             // Push the root folder onto the stack
             folders.Push(FtpRemote);
 
-            int folderstoprocess = int.MaxValue;
-            int.TryParse(FoldersToProcess, out folderstoprocess);
-
             // Start looping.
-            while (folders.Count > 0 && foldersProcesed < folderstoprocess)
+            while (folders.Count > 0 && foldersProcesed < FoldersToProcess)
             {
                 foldersProcesed++;
                 var currentFolderRemote = folders.Pop();
