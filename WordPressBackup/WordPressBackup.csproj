@@ -6,11 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove=".dockerignore" />
     <None Remove="Dockerfile" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Include="Dockerfile" />
   </ItemGroup>
 
   <ItemGroup>
@@ -19,12 +16,6 @@
     <PackageReference Include="Microsoft.Azure.Storage.Blob" Version="9.4.1" />
     <PackageReference Include="MySqlBackup.NET" Version="2.1.0" />
     <PackageReference Include="Polly" Version="6.1.2" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Update=".dockerignore">
-      <DependentUpon>Dockerfile</DependentUpon>
-    </None>
   </ItemGroup>
 
 </Project>

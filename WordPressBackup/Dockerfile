@@ -1,16 +1,11 @@
-﻿FROM microsoft/dotnet:sdk AS build-env
+﻿FROM microsoft/dotnet:2.1-sdk
 WORKDIR /app
 
-# Copy csproj and restore as distinct layers
+# copy csproj and restore as distinct layers
 COPY *.csproj ./
 RUN dotnet restore
 
-# Copy everything else and build
+# copy and build everything else
 COPY . ./
 RUN dotnet publish -c Release -o out
-
-# Build runtime image
-FROM microsoft/dotnet:aspnetcore-runtime
-WORKDIR /app
-COPY --from=build-env /app/out .
-ENTRYPOINT ["dotnet", "wordpressbackup.dll"]
+ENTRYPOINT ["dotnet", "out/wordpressbackup.dll"]
