@@ -17,9 +17,24 @@ namespace WordPressBackup
 {
     class Program
     {
+        private string _foldersToProcessString;
+        private string _retrysString;
+        private string _backupFile;
+        private string _backupWorkingDirectory;
+        private string _ftpHost;
+        private string _ftpUser;
+        private string _ftpPassword;
+        private string _ftpRemote;
+        private string _mySqlServer;
+        private string _mySqlDatabase;
+        private string _mySqlUser;
+        private string _mySqlPassword;
+        private string _azStorageConnectionString;
+        private string _azStorageContainerName;
+
         public Program()
         {
-            
+
         }
 
         /// <summary>
@@ -40,7 +55,7 @@ namespace WordPressBackup
 
         [Option("-folders", CommandOptionType.SingleValue,
             Description = @"OPTIONAL: This is for Debugging ONLY. The number of folders to look in on the ftp site.")]
-        public string FoldersToProcessString { get; set; }
+        public string FoldersToProcessString { get => _foldersToProcessString ?? Environment.GetEnvironmentVariable("FoldersToProcess"); set => _foldersToProcessString = value; }
 
         public int FoldersToProcess
         {
@@ -60,7 +75,7 @@ namespace WordPressBackup
 
         [Option("-retrys", CommandOptionType.SingleValue,
             Description = @"In the event of a temporal issue with the backup, how often should we retry (Default = 5).")]
-        public string RetrysString { get; set; }
+        public string RetrysString { get => _retrysString ?? Environment.GetEnvironmentVariable("Retrys"); set => _retrysString = value; }
         public int Retrys
         {
             get
@@ -76,59 +91,59 @@ namespace WordPressBackup
                 }
             }
         }
-        
+
         [Option("-file", CommandOptionType.SingleValue,
             Description = @"The backup file name to use.")]
-        public string BackupFile { get; set; }
+        public string BackupFile { get => _backupFile ?? Environment.GetEnvironmentVariable("BackupFile"); set => _backupFile = value; }
 
         [Option("-dir", CommandOptionType.SingleValue,
             Description = @"The folder put the backup in and use for temporary files during backup. (Default = the current folder)")]
-        public string BackupWorkingDirectory { get; set; }
+        public string BackupWorkingDirectory { get => _backupWorkingDirectory ?? Environment.GetEnvironmentVariable("BackupWorkingDirectory"); set => _backupWorkingDirectory = value; }
 
         private string BackupFolder { get { return Path.Combine(BackupWorkingDirectory, BackupFile); } }
         private string BackupZipFile { get { return Path.Combine(BackupWorkingDirectory, BackupFile + ".zip"); } }
 
         [Option("-ftphost", CommandOptionType.SingleValue,
             Description = @"The host name for the FTP server (i.e. ftppub.everleap.com)")]
-        public string FtpHost { get; set; }
+        public string FtpHost { get => _ftpHost ?? Environment.GetEnvironmentVariable("FtpHost"); set => _ftpHost = value; }
 
         [Option("-ftpuser", CommandOptionType.SingleValue,
             Description = @"The user name for the FTP server (i.e. 1234-567\0011234)")]
-        public string FtpUser { get; set; }
+        public string FtpUser { get => _ftpUser ?? Environment.GetEnvironmentVariable("FtpUser"); set => _ftpUser = value; }
 
         [Option("-ftppwd", CommandOptionType.SingleValue,
             Description = @"The password for the FTP server")]
-        public string FtpPassword { get; set; }
+        public string FtpPassword { get => _ftpPassword ?? Environment.GetEnvironmentVariable("FtpPassword"); set => _ftpPassword = value; }
 
         [Option("-ftpremote", CommandOptionType.SingleValue,
             Description = @"The path to your application on the FTP server (Default /site/wwwroot)")]
-        public string FtpRemote { get; set; }
+        public string FtpRemote { get => _ftpRemote ?? Environment.GetEnvironmentVariable("FtpRemote"); set => _ftpRemote = value; }
 
         public string FtpLocal { get { return Path.Combine(BackupFolder, "wwwroot"); } }
 
         [Option("-dbserver", CommandOptionType.SingleValue,
             Description = @"The database server (i.e. my01.everleap.com)")]
-        public string MySqlServer { get; set; }
+        public string MySqlServer { get => _mySqlServer ?? Environment.GetEnvironmentVariable("MySqlServer"); set => _mySqlServer = value; }
 
         [Option("-dbname", CommandOptionType.SingleValue,
             Description = @"The database name")]
-        public string MySqlDatabase { get; set; }
+        public string MySqlDatabase { get => _mySqlDatabase ?? Environment.GetEnvironmentVariable("MySqlDatabase"); set => _mySqlDatabase = value; }
 
         [Option("-dbuser", CommandOptionType.SingleValue,
             Description = @"The user name for the database")]
-        public string MySqlUser { get; set; }
+        public string MySqlUser { get => _mySqlUser ?? Environment.GetEnvironmentVariable("MySqlUser"); set => _mySqlUser = value; }
 
         [Option("-dbpwd", CommandOptionType.SingleValue,
             Description = @"The password for the database")]
-        public string MySqlPassword { get; set; }
+        public string MySqlPassword { get => _mySqlPassword ?? Environment.GetEnvironmentVariable("MySqlPassword"); set => _mySqlPassword = value; }
 
         [Option("-azconnection", CommandOptionType.SingleValue,
             Description = @"OPTIONAL: Use ONLY if you want to upload your backup file to Azure Storage. Storage Connection String")]
-        public string AzStorageConnectionString { get; set; }
+        public string AzStorageConnectionString { get => _azStorageConnectionString ?? Environment.GetEnvironmentVariable("AzStorageConnectionString"); set => _azStorageConnectionString = value; }
 
         [Option("-azcontainer", CommandOptionType.SingleValue,
             Description = @"OPTIONAL: Use ONLY if you want to upload your backup file to Azure Storage. Storage container name")]
-        public string AzStorageContainerName { get; set; }
+        public string AzStorageContainerName { get => _azStorageContainerName ?? Environment.GetEnvironmentVariable("AzStorageContainerName"); set => _azStorageContainerName = value; }
 
         static void Main(string[] args)
         {
@@ -297,7 +312,8 @@ namespace WordPressBackup
             var constring = $"server={MySqlServer};user={MySqlUser};pwd={MySqlPassword};database={MySqlDatabase};charset=utf8;convertzerodatetime=true;";
             var file = Path.Combine(BackupFolder, "db.sql");
 
-            RetryPolicy.Execute(() => {
+            RetryPolicy.Execute(() =>
+            {
 
                 Write($"Starting Database Backup", ConsoleColor.Yellow);
 
