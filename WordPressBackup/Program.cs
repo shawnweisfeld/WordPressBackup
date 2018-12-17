@@ -1,5 +1,8 @@
 ﻿using FluentFTP;
 using McMaster.Extensions.CommandLineUtils;
+using Microsoft.WindowsAzure.Storage;
+using Microsoft.WindowsAzure.Storage.Auth;
+using Microsoft.WindowsAzure.Storage.Blob;
 using MySql.Data.MySqlClient;
 using Polly;
 using System;
@@ -52,6 +55,7 @@ namespace WordPressBackup
         public string BackupWorkingDirectory { get; set; }
 
         private string BackupFolder { get { return Path.Combine(BackupWorkingDirectory, BackupFile); } }
+        private string BackupZipFile { get { return Path.Combine(BackupWorkingDirectory, BackupFile + ".zip"); } }
 
         [Option("-ftphost", CommandOptionType.SingleValue,
             Description = @"The host name for the FTP server (i.e. ftppub.everleap.com)")]
@@ -87,7 +91,15 @@ namespace WordPressBackup
             Description = @"The password for the database")]
         public string MySqlPassword { get; set; }
 
-        static void Main(string[] args) 
+        [Option("-azconnection", CommandOptionType.SingleValue,
+            Description = @"OPTIONAL: Use ONLY if you want to upload your backup file to Azure Storage. Storage Connection String")]
+        public string AzStorageConnectionString { get; set; }
+
+        [Option("-azcontainer", CommandOptionType.SingleValue,
+            Description = @"OPTIONAL: Use ONLY if you want to upload your backup file to Azure Storage. Storage container name")]
+        public string AzStorageContainerName { get; set; }
+
+        static void Main(string[] args)
         {
             CommandLineApplication.Execute<Program>(args);
         }
@@ -178,6 +190,23 @@ namespace WordPressBackup
             }
             Write($"DB Password: {MySqlPassword}", ConsoleColor.Blue);
 
+
+            if (!string.IsNullOrEmpty(AzStorageConnectionString)
+                && !string.IsNullOrEmpty(AzStorageContainerName))
+            {
+                Write($"Backing Up to Azure", ConsoleColor.Green);
+                Write($"Azure Storage Connection String: {AzStorageConnectionString}", ConsoleColor.Blue);
+                Write($"Azure Storage Container Name: {AzStorageContainerName}", ConsoleColor.Blue);
+            }
+            else if (!string.IsNullOrEmpty(AzStorageConnectionString)
+                || !string.IsNullOrEmpty(AzStorageContainerName))
+            {
+                Write($"Missing Azure Upload Setting", ConsoleColor.Red);
+                Write($"Azure Storage Connection String: {AzStorageConnectionString}", ConsoleColor.Blue);
+                Write($"Azure Storage Container Name: {AzStorageContainerName}", ConsoleColor.Blue);
+                isInputsValid = false;
+            }
+
             if (isInputsValid)
             {
                 Write($"Creating Backup {BackupFile}!", ConsoleColor.Green);
@@ -199,6 +228,7 @@ namespace WordPressBackup
                 BackupApplication().Wait();
                 BackupDatabase();
                 ZipBackup();
+                UploadToAzure().Wait();
             }
             else
             {
@@ -214,16 +244,14 @@ namespace WordPressBackup
         /// </summary>
         private void ZipBackup()
         {
-            var file = Path.Combine(BackupWorkingDirectory, BackupFile + ".zip");
-
             RetryPolicy.Execute(() =>
             {
                 Write($"Starting Backup Compression", ConsoleColor.Yellow);
 
-                if (File.Exists(file))
-                    File.Delete(file);
+                if (File.Exists(BackupZipFile))
+                    File.Delete(BackupZipFile);
 
-                ZipFile.CreateFromDirectory(BackupFolder, file, CompressionLevel.Optimal, false);
+                ZipFile.CreateFromDirectory(BackupFolder, BackupZipFile, CompressionLevel.Optimal, false);
 
                 Write($"Backup Compression Complete!", ConsoleColor.Green);
 
@@ -262,6 +290,30 @@ namespace WordPressBackup
 
                 Write($"Database Backup Complete!", ConsoleColor.Green);
             });
+        }
+
+        private async Task UploadToAzure()
+        {
+            if (!string.IsNullOrEmpty(AzStorageConnectionString)
+               && !string.IsNullOrEmpty(AzStorageContainerName))
+            {
+                await RetryPolicyAsync.ExecuteAsync(async () =>
+                {
+                    Write($"Starting Azure Upload!", ConsoleColor.Green);
+                    CloudStorageAccount storageAccount = null;
+
+                    if (CloudStorageAccount.TryParse(AzStorageConnectionString, out storageAccount))
+                    {
+                        CloudBlobClient cloudBlobClient = storageAccount.CreateCloudBlobClient();
+                        var cloudBlobContainer = cloudBlobClient.GetContainerReference(AzStorageContainerName);
+                        await cloudBlobContainer.CreateIfNotExistsAsync();
+                        CloudBlockBlob cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference(Path.GetFileName(BackupZipFile));
+                        await cloudBlockBlob.UploadFromFileAsync(BackupZipFile);
+                    }
+
+                    Write($"Finished Azure Upload!", ConsoleColor.Green);
+                });
+            }
         }
 
         /// <summary>
