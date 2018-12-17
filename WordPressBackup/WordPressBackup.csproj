@@ -7,7 +7,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentFTP" Version="19.2.2" />
-    <PackageReference Include="Microsoft.Extensions.CommandLineUtils" Version="1.1.1" />
+    <PackageReference Include="McMaster.Extensions.CommandLineUtils" Version="2.2.5" />
     <PackageReference Include="MySqlBackup.NET" Version="2.1.0" />
     <PackageReference Include="Polly" Version="6.1.2" />
   </ItemGroup>

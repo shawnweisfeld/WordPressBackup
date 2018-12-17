@@ -1,5 +1,5 @@
 ﻿using FluentFTP;
-using Microsoft.Extensions.CommandLineUtils;
+using McMaster.Extensions.CommandLineUtils;
 using MySql.Data.MySqlClient;
 using Polly;
 using System;
@@ -14,204 +14,166 @@ namespace WordPressBackup
 {
     class Program
     {
-        private static int RETRYS;
-
-        private static string BKUP_FILE;
-        private static string BKUP_WORKINGDIR;
-        private static string BKUP_FOLDER;
-
-        private static string FTP_HOST;
-        private static string FTP_USER;
-        private static string FTP_PASSWORD;
-        private static string FTP_REMOTE;
-        private static string FTP_LOCAL;
-
-        private static string MYSQL_SERVER;
-        private static string MYSQL_DATABASE;
-        private static string MYSQL_USER;
-        private static string MYSQL_PASSWORD;
-
-        static void Main(string[] args)
+        public Program()
         {
-            CommandLineApplication commandLineApplication = new CommandLineApplication(throwOnUnexpectedArg: false);
+            Retrys = -1;
+            FoldersToProcess = int.MaxValue;
+        }
 
-            CommandOption coRetrys = commandLineApplication.Option(
-              "-retrys <retrys>",
-              @"In the event of a temporal issue with the backup, how often should we retry (Default = 5).",
-              CommandOptionType.SingleValue);
+        [Option("-folders", CommandOptionType.SingleValue,
+            Description = @"This is for Debugging ONLY. The number of folders to look in on the ftp site.")]
+        public int FoldersToProcess { get; set; }
 
-            CommandOption coBkupFile = commandLineApplication.Option(
-              "-file <file>",
-              @"The backup file name stem to use.",
-              CommandOptionType.SingleValue);
+        [Option("-retrys", CommandOptionType.SingleValue,
+            Description = @"In the event of a temporal issue with the backup, how often should we retry (Default = 5).")]
+        public int Retrys { get; set; }
 
-            CommandOption coBkupDir = commandLineApplication.Option(
-              "-dir <file>",
-              @"The folder put the backup in and use for temporary files during backup. (Default = the current folder)",
-              CommandOptionType.SingleValue);
+        [Option("-file", CommandOptionType.SingleValue,
+            Description = @"The backup file name to use.")]
+        public string BackupFile { get; set; }
 
-            CommandOption coFtpHost = commandLineApplication.Option(
-              "-ftphost <host>",
-              @"The host name for the FTP server (i.e. ftppub.everleap.com)",
-              CommandOptionType.SingleValue);
+        [Option("-dir", CommandOptionType.SingleValue,
+            Description = @"The folder put the backup in and use for temporary files during backup. (Default = the current folder)")]
+        public string BackupWorkingDirectory { get; set; }
 
-            CommandOption coFtpUser = commandLineApplication.Option(
-              "-ftpuser <user>",
-              @"The user name for the FTP server (i.e. 1234-567\0011234)",
-              CommandOptionType.SingleValue);
+        private string BackupFolder { get { return Path.Combine(BackupWorkingDirectory, BackupFile); } }
 
-            CommandOption coFtpPassword = commandLineApplication.Option(
-              "-ftppwd <password>",
-              @"The password for the FTP server",
-              CommandOptionType.SingleValue);
+        [Option("-ftphost", CommandOptionType.SingleValue,
+            Description = @"The host name for the FTP server (i.e. ftppub.everleap.com)")]
+        public string FtpHost { get; set; }
 
-            CommandOption coFtpRemote = commandLineApplication.Option(
-              "-ftpremote <remote>",
-              @"The path to your application on the FTP server (Default /site/wwwroot)",
-              CommandOptionType.SingleValue);
+        [Option("-ftpuser", CommandOptionType.SingleValue,
+            Description = @"The user name for the FTP server (i.e. 1234-567\0011234)")]
+        public string FtpUser { get; set; }
 
-            CommandOption coMySqlServer = commandLineApplication.Option(
-              "-dbserver <mysqlserver>",
-              @"The database server (i.e. my01.everleap.com)",
-              CommandOptionType.SingleValue);
+        [Option("-ftppwd", CommandOptionType.SingleValue,
+            Description = @"The password for the FTP server")]
+        public string FtpPassword { get; set; }
 
-            CommandOption coMySqlDatabase = commandLineApplication.Option(
-              "-db <mysqldb>",
-              @"The database name",
-              CommandOptionType.SingleValue);
+        [Option("-ftpremote", CommandOptionType.SingleValue,
+            Description = @"The path to your application on the FTP server (Default /site/wwwroot)")]
+        public string FtpRemote { get; set; }
 
-            CommandOption coMySqlUser = commandLineApplication.Option(
-              "-dbuser <user>",
-              @"The user name for the database",
-              CommandOptionType.SingleValue);
+        public string FtpLocal { get { return Path.Combine(BackupFolder, "wwwroot"); } }
 
-            CommandOption coMySqlPassword = commandLineApplication.Option(
-              "-dbpwd <password>",
-              @"The password for the database",
-              CommandOptionType.SingleValue);
+        [Option("-dbserver", CommandOptionType.SingleValue,
+            Description = @"The database server (i.e. my01.everleap.com)")]
+        public string MySqlServer { get; set; }
 
-            commandLineApplication.HelpOption("-? | -h | --help");
+        [Option("-dbname", CommandOptionType.SingleValue,
+            Description = @"The database name")]
+        public string MySqlDatabase { get; set; }
 
-            commandLineApplication.OnExecute(() =>
+        [Option("-dbuser", CommandOptionType.SingleValue,
+            Description = @"The user name for the database")]
+        public string MySqlUser { get; set; }
+
+        [Option("-dbpwd", CommandOptionType.SingleValue,
+            Description = @"The password for the database")]
+        public string MySqlPassword { get; set; }
+
+
+        static void Main(string[] args) 
+        {
+            CommandLineApplication.Execute<Program>(args);
+        }
+
+        private void OnExecute()
+        {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+            bool isInputsValid = true;
+
+            //Validate and Echo back parameters
+            if (Retrys == -1)
             {
-                if (!int.TryParse(coRetrys.Value(), out RETRYS))
-                {
-                    RETRYS = 5;
-                }
-                Write($"On Error Retrys: {RETRYS}", ConsoleColor.Blue);
+                Retrys = 5;
+            }
+            Write($"On Error Retrys: {Retrys}", ConsoleColor.Blue);
 
-                if (coBkupFile.HasValue())
-                {
-                    BKUP_FILE = coBkupFile.Value();
-                    Write($"File: {BKUP_FILE}", ConsoleColor.Blue);
-                }
-                else
-                {
-                    Write($"Missing backup filename", ConsoleColor.Red);
-                    return 1;
-                }
+            Write($"File: {BackupFile}", ConsoleColor.Blue);
 
-                if (coBkupDir.HasValue())
-                {
-                    if (!Directory.Exists(coBkupDir.Value()))
-                    {
-                        Write($"Invalid Backup Directory: {coBkupDir.Value()}", ConsoleColor.Red);
-                        return 1;
-                    }
+            if (string.IsNullOrEmpty(BackupWorkingDirectory))
+            {
+                BackupWorkingDirectory = Directory.GetCurrentDirectory();
+            }
+            else if (!Directory.Exists(BackupWorkingDirectory))
+            {
+                Write($"Invalid Backup Directory: {BackupWorkingDirectory}", ConsoleColor.Red);
+                isInputsValid = false;
+            }
+            Write($"Backup Working Directory: {BackupWorkingDirectory}", ConsoleColor.Blue);
 
-                    BKUP_WORKINGDIR = coBkupDir.Value();
-                }
-                else
-                {
-                    BKUP_WORKINGDIR = Directory.GetCurrentDirectory();
-                }
-                Write($"Backup Working Directory: {BKUP_WORKINGDIR}", ConsoleColor.Blue);
+            if (string.IsNullOrEmpty(FtpHost))
+            {
+                Write($"Missing FTP Host", ConsoleColor.Red);
+                isInputsValid = false;
+            }
+            Write($"FTP Host: {FtpHost}", ConsoleColor.Blue);
 
-                BKUP_FOLDER = Path.Combine(BKUP_WORKINGDIR, BKUP_FILE);
+            if (string.IsNullOrEmpty(FtpUser))
+            {
+                Write($"Missing FTP User", ConsoleColor.Red);
+                isInputsValid = false;
+            }
+            Write($"FTP User: {FtpUser}", ConsoleColor.Blue);
 
-                if (!coFtpHost.HasValue())
-                {
-                    Write($"Missing FTP Host", ConsoleColor.Red);
-                    return 1;
-                }
-                FTP_HOST = coFtpHost.Value();
-                Write($"FTP Host: {FTP_HOST}", ConsoleColor.Blue);
+            if (string.IsNullOrEmpty(FtpPassword))
+            {
+                Write($"Missing FTP Password", ConsoleColor.Red);
+                isInputsValid = false;
+            }
+            Write($"FTP Password: {FtpPassword}", ConsoleColor.Blue);
 
-                if (!coFtpUser.HasValue())
-                {
-                    Write($"Missing FTP User", ConsoleColor.Red);
-                    return 1;
-                }
-                FTP_USER = coFtpUser.Value();
-                Write($"FTP User: {FTP_USER}", ConsoleColor.Blue);
+            if (string.IsNullOrEmpty(FtpRemote))
+            {
+                FtpRemote = @"/site/wwwroot";
+            }
+            Write($"FTP Remote: {FtpRemote}", ConsoleColor.Blue);
 
-                if (!coFtpPassword.HasValue())
-                {
-                    Write($"Missing FTP Password", ConsoleColor.Red);
-                    return 1;
-                }
-                FTP_PASSWORD = coFtpPassword.Value();
-                Write($"FTP Password: {FTP_PASSWORD}", ConsoleColor.Blue);
+            if (string.IsNullOrEmpty(MySqlServer))
+            {
+                Write($"Missing DB Server", ConsoleColor.Red);
+                isInputsValid = false;
+            }
+            Write($"DB Server: {MySqlServer}", ConsoleColor.Blue);
 
-                if (coFtpRemote.HasValue())
-                {
-                    FTP_REMOTE = coFtpRemote.Value();
-                }
-                else
-                {
-                    FTP_REMOTE = @"/site/wwwroot";
-                }
-                Write($"FTP Remote: {FTP_REMOTE}", ConsoleColor.Blue);
+            if (string.IsNullOrEmpty(MySqlDatabase))
+            {
+                Write($"Missing DB Database Name", ConsoleColor.Red);
+                isInputsValid = false;
+            }
+            Write($"DB Database Name: {MySqlDatabase}", ConsoleColor.Blue);
 
-                FTP_LOCAL = Path.Combine(BKUP_FOLDER, "wwwroot");
+            if (string.IsNullOrEmpty(MySqlUser))
+            {
+                Write($"Missing DB User Name", ConsoleColor.Red);
+                isInputsValid = false;
+            }
+            Write($"DB User Name: {MySqlUser}", ConsoleColor.Blue);
 
-                if (!coMySqlServer.HasValue())
-                {
-                    Write($"Missing database server", ConsoleColor.Red);
-                    return 1;
-                }
-                MYSQL_SERVER = coMySqlServer.Value();
-                Write($"MySQL Server: {MYSQL_SERVER}", ConsoleColor.Blue);
+            if (string.IsNullOrEmpty(MySqlPassword))
+            {
+                Write($"Missing DB Password", ConsoleColor.Red);
+                isInputsValid = false;
+            }
+            Write($"DB Password: {MySqlPassword}", ConsoleColor.Blue);
 
-                if (!coMySqlDatabase.HasValue())
-                {
-                    Write($"Missing database name", ConsoleColor.Red);
-                    return 1;
-                }
-                MYSQL_DATABASE = coMySqlDatabase.Value();
-                Write($"MySQL Database: {MYSQL_DATABASE}", ConsoleColor.Blue);
-
-                if (!coMySqlUser.HasValue())
-                {
-                    Write($"Missing database user name", ConsoleColor.Red);
-                    return 1;
-                }
-                MYSQL_USER = coMySqlUser.Value();
-                Write($"MySQL User: {MYSQL_USER}", ConsoleColor.Blue);
-
-                if (!coMySqlPassword.HasValue())
-                {
-                    Write($"Missing database password", ConsoleColor.Red);
-                    return 1;
-                }
-                MYSQL_PASSWORD = coMySqlPassword.Value();
-                Write($"MySQL Password: {MYSQL_PASSWORD}", ConsoleColor.Blue);
-
-                Stopwatch stopwatch = new Stopwatch();
-                stopwatch.Start();
-
-                Write($"Creating Backup {BKUP_FILE}!", ConsoleColor.Green);
+            if (isInputsValid)
+            {
+                Write($"Creating Backup {BackupFile}!", ConsoleColor.Green);
 
                 BackupApplication().Wait();
                 BackupDatabase();
                 ZipBackup();
+            }
+            else
+            {
+                Write($"Invalid Inputs, cannot create backup!", ConsoleColor.Red);
+            }
 
-                stopwatch.Stop();
-                Console.WriteLine($"{BKUP_FILE} Done in {stopwatch.Elapsed:c}!");
-
-                return 0;
-            });
-            commandLineApplication.Execute(args);
+            stopwatch.Stop();
+            Console.WriteLine($"{BackupFile} Done in {stopwatch.Elapsed:c}!");
         }
 
 
@@ -223,12 +185,12 @@ namespace WordPressBackup
         /// 
         /// </summary>
         /// <returns></returns>
-        private static Policy GetRetryPolicy()
+        private Policy GetRetryPolicy()
         {
             return Policy
               .Handle<Exception>()
               .WaitAndRetry(
-                  RETRYS,
+                  Retrys,
                   (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
                   (exception, timeSpan, retryCount, context) => Write($"Retry {retryCount} : {exception.Message}", ConsoleColor.Red));
         }
@@ -242,12 +204,12 @@ namespace WordPressBackup
         /// 
         /// </summary>
         /// <returns></returns>
-        private static Policy GetRetryPolicyAsync()
+        private Policy GetRetryPolicyAsync()
         {
             return Policy
               .Handle<Exception>()
               .WaitAndRetryAsync(
-                  RETRYS,
+                  Retrys,
                   (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
                   (exception, timeSpan, retryCount, context) => Write($"Retry {retryCount} : {exception.Message}", ConsoleColor.Red));
         }
@@ -255,9 +217,9 @@ namespace WordPressBackup
         /// <summary>
         /// Zip up the folder contating the DB and Application backups
         /// </summary>
-        private static void ZipBackup()
+        private void ZipBackup()
         {
-            var file = Path.Combine(BKUP_WORKINGDIR, BKUP_FILE + ".zip");
+            var file = Path.Combine(BackupWorkingDirectory, BackupFile + ".zip");
 
             GetRetryPolicy().Execute(() =>
             {
@@ -266,11 +228,11 @@ namespace WordPressBackup
                 if (File.Exists(file))
                     File.Delete(file);
 
-                ZipFile.CreateFromDirectory(BKUP_FOLDER, file, CompressionLevel.Optimal, false);
+                ZipFile.CreateFromDirectory(BackupFolder, file, CompressionLevel.Optimal, false);
 
                 Write($"Backup Compression Complete!", ConsoleColor.Green);
 
-                Directory.Delete(BKUP_FOLDER, true);
+                Directory.Delete(BackupFolder, true);
 
                 Write($"Temp Files Cleaned up!", ConsoleColor.Green);
 
@@ -280,10 +242,10 @@ namespace WordPressBackup
         /// <summary>
         /// Backup up the MySQL Database to a file
         /// </summary>
-        private static void BackupDatabase()
+        private void BackupDatabase()
         {
-            var constring = $"server={MYSQL_SERVER};user={MYSQL_USER};pwd={MYSQL_PASSWORD};database={MYSQL_DATABASE};charset=utf8;convertzerodatetime=true;";
-            var file = Path.Combine(BKUP_FOLDER, "db.sql");
+            var constring = $"server={MySqlServer};user={MySqlUser};pwd={MySqlPassword};database={MySqlDatabase};charset=utf8;convertzerodatetime=true;";
+            var file = Path.Combine(BackupFolder, "db.sql");
 
             GetRetryPolicy().Execute(() => {
 
@@ -311,13 +273,15 @@ namespace WordPressBackup
         /// Use FTP to download the entire site.
         /// </summary>
         /// <returns></returns>
-        private static async Task BackupApplication()
+        private async Task BackupApplication()
         {
-            //Delete the local temp directory if it already exists.
-            if (Directory.Exists(FTP_LOCAL))
-                Directory.Delete(FTP_LOCAL, true);
+            int foldersProcesed = 0;
 
-            var remotelen = FTP_REMOTE.Length;
+            //Delete the local temp directory if it already exists.
+            if (Directory.Exists(FtpLocal))
+                Directory.Delete(FtpLocal, true);
+
+            var remotelen = FtpRemote.Length;
 
             // Holds a list of folders that we need to traverse
             // using a stack to eliminate recursion
@@ -328,13 +292,14 @@ namespace WordPressBackup
             var downloads = new List<Task>();
 
             // Push the root folder onto the stack
-            folders.Push(FTP_REMOTE);
+            folders.Push(FtpRemote);
 
             // Start looping.
-            while (folders.Count > 0)
+            while (folders.Count > 0 && foldersProcesed < FoldersToProcess)
             {
+                foldersProcesed++;
                 var currentFolderRemote = folders.Pop();
-                var currentFolderLocal = FTP_LOCAL + currentFolderRemote.Substring(remotelen);
+                var currentFolderLocal = FtpLocal + currentFolderRemote.Substring(remotelen);
                 var filesInRemote = new List<string>();
 
                 await GetRetryPolicyAsync().ExecuteAsync(async () =>
@@ -344,14 +309,12 @@ namespace WordPressBackup
                         Directory.CreateDirectory(currentFolderLocal);
 
                     // FTP into the server and get a list of all the files and folders that exist
-                    using (FtpClient client = new FtpClient(FTP_HOST, FTP_USER, FTP_PASSWORD))
+                    using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
                     {
                         client.Connect();
 
                         foreach (var item in await client.GetListingAsync(currentFolderRemote))
                         {
-                            Write($"Found: {item.FullName}", ConsoleColor.Yellow);
-
                             if (item.Type == FtpFileSystemObjectType.Directory)
                             {
                                 //Send folders to get processed in this thread
@@ -364,6 +327,8 @@ namespace WordPressBackup
                             }
                         }
 
+                        Write($"Found {filesInRemote.Count} Files in {currentFolderRemote}", ConsoleColor.Yellow);
+
                         //Send the entire list of files to be downloaded to the download method
                         downloads.Add(DownloadFiles(filesInRemote, currentFolderLocal));
 
@@ -371,6 +336,8 @@ namespace WordPressBackup
                     }
                 });
             }
+
+            Write("Waiting for all file downloads to complete.", ConsoleColor.Green);
 
             //Wait for all the downloads to complete before exiting
             Task.WaitAll(downloads.ToArray());
@@ -382,13 +349,13 @@ namespace WordPressBackup
         /// <param name="files"></param>
         /// <param name="destination"></param>
         /// <returns></returns>
-        private static async Task DownloadFiles(IEnumerable<string> files, string destination)
+        private async Task DownloadFiles(IEnumerable<string> files, string destination)
         {
             if (files.Any())
             {
                 await GetRetryPolicyAsync().ExecuteAsync(async () =>
                 {
-                    using (FtpClient client = new FtpClient(FTP_HOST, FTP_USER, FTP_PASSWORD))
+                    using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
                     {
                         client.Connect();
 
@@ -409,7 +376,7 @@ namespace WordPressBackup
         /// </summary>
         /// <param name="message"></param>
         /// <param name="color"></param>
-        private static void Write(string message, ConsoleColor color)
+        private void Write(string message, ConsoleColor color)
         {
             lock (Console.Out)
             {
