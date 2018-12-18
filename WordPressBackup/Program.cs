@@ -101,7 +101,7 @@ namespace WordPressBackup
         public string BackupWorkingDirectory { get => _backupWorkingDirectory ?? Environment.GetEnvironmentVariable("BackupWorkingDirectory"); set => _backupWorkingDirectory = value; }
 
         private string BackupFolder { get { return Path.Combine(BackupWorkingDirectory, BackupFile); } }
-        private string BackupZipFile { get { return Path.Combine(BackupWorkingDirectory, BackupFile + ".zip"); } }
+        private string BackupZipFile { get { return Path.Combine(BackupWorkingDirectory, $"{DateTime.UtcNow:yyyyMMdd}_{BackupFile}.zip"); } }
 
         [Option("-ftphost", CommandOptionType.SingleValue,
             Description = @"The host name for the FTP server (i.e. ftppub.everleap.com)")]
