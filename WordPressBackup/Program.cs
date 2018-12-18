@@ -437,10 +437,20 @@ namespace WordPressBackup
                 });
             }
 
-            Write("Waiting for all file downloads to complete.", ConsoleColor.Green);
 
             //Wait for all the downloads to complete before exiting
-            Task.WaitAll(downloads.ToArray());
+            var allDone = Task.WhenAll(downloads.ToArray());
+            var waitTimer = new Stopwatch();
+            waitTimer.Start();
+
+            while (!allDone.IsCompleted)
+            {
+                var total = downloads.Count();
+                var done = downloads.Count(x => x.IsCompleted);
+
+                Write($"Waiting for all file downloads to complete {done} of {total} in {waitTimer.Elapsed:c}.", ConsoleColor.Green);
+                await Task.Delay(5000);
+            }
         }
 
         /// <summary>
