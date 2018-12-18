@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace WordPressBackup
@@ -327,9 +328,18 @@ namespace WordPressBackup
                     cmd.Connection = conn;
                     cmd.CommandTimeout = 0;
                     conn.Open();
-                    mb.ExportToFile(file);
+
+                    // there is an export to file function on the MySqlBackup library
+                    // however the export it made would not reimport
+                    // I was seeing the following error when importing into MySQL using Workbench
+                    //   ASCII '\0' appeared in the statement, but this is not allowed unless option --binary-mode is enabled and mysql is run in non-interactive mode. Set --binary-mode to 1 if ASCII '\0' is expected.
+                    // finally decided to just remove all the \0 characters and the import worked fine.
+                    // Hopefully they are not important (eek!)
+                    File.WriteAllText(file, mb.ExportToString().Replace("\0", ""), Encoding.UTF8);
+
                     conn.Close();
                 }
+                
 
                 Write($"Database Backup Complete!", ConsoleColor.Green);
             });
