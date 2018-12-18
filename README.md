@@ -2,13 +2,15 @@
 
 The goal of this project is to make a simple way to download all the files and data that make up a wordpress website.
 
+>> NOTE: Depending on the size of your site and the speed of your network a complete backup can take a while (i.e. 30+ min). 
+
 ## Get the applicaiton here
 
 ```
 https://dgcbackuparchive.blob.core.windows.net/app/WordPressBackup.zip
 ```
 
-## Run this from powershell
+## Sample PowerShell Script To make a backup
 
 ```
 $Retryes = 5;
@@ -27,4 +29,10 @@ wordpressbackup.exe -retrys $Retryes -file $File  -dir $Dir `
     -ftphost $FTPHost -ftpuser $FTPUser -ftppwd $FTPPwd `
     -ftpremote $FTPRemote -dbserver $DBServer -dbname $DBName `
     -dbuser $DBUser -dbpwd $DBPwd
+```
+
+## Get help on all the possible arguments by running
+
+```
+wordpressbackup.exe -h
 ```
