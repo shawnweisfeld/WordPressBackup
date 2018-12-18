@@ -1,6 +1,6 @@
 # WordPressBackup
 
-The goal of this project is to make a single 1 line to download all the files and data that make up a wordpress website.
+The goal of this project is to make a simple way to download all the files and data that make up a wordpress website.
 
 ## Get the applicaiton here
 
