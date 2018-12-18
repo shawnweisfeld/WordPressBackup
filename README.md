@@ -6,6 +6,8 @@ The goal of this project is to make a simple way to download all the files and d
 
 ## Get the applicaiton here
 
+[![Build Status](https://dev.azure.com/SWeisfeld/GiveCampBackup/_apis/build/status/GiveCampBackup-CI?branchName=master)](https://dev.azure.com/SWeisfeld/GiveCampBackup/_build/latest?definitionId=3?branchName=master)
+
 ```
 https://dgcbackuparchive.blob.core.windows.net/app/WordPressBackup.zip
 ```
