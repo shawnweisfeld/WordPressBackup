@@ -160,12 +160,12 @@ namespace WordPressBackup
             //Validate and Echo back parameters
             if (FoldersToProcess != int.MaxValue)
             {
-                Write($"TESTING MODE: only downloading {FoldersToProcess} folders.", ConsoleColor.Blue);
+                Console.WriteLine($"TESTING MODE: only downloading {FoldersToProcess} folders.");
             }
 
-            Write($"On Error Retrys: {Retrys}", ConsoleColor.Blue);
+            Console.WriteLine($"On Error Retrys: {Retrys}");
 
-            Write($"File: {BackupFile}", ConsoleColor.Blue);
+            Console.WriteLine($"File: {BackupFile}");
 
             if (string.IsNullOrEmpty(BackupWorkingDirectory))
             {
@@ -173,100 +173,100 @@ namespace WordPressBackup
             }
             else if (!Directory.Exists(BackupWorkingDirectory))
             {
-                Write($"Invalid Backup Directory: {BackupWorkingDirectory}", ConsoleColor.Red);
+                Console.WriteLine($"Invalid Backup Directory: {BackupWorkingDirectory}");
                 isInputsValid = false;
             }
-            Write($"Backup Working Directory: {BackupWorkingDirectory}", ConsoleColor.Blue);
+            Console.WriteLine($"Backup Working Directory: {BackupWorkingDirectory}");
 
             if (string.IsNullOrEmpty(FtpHost))
             {
-                Write($"Missing FTP Host", ConsoleColor.Red);
+                Console.WriteLine($"Missing FTP Host");
                 isInputsValid = false;
             }
-            Write($"FTP Host: {FtpHost}", ConsoleColor.Blue);
+            Console.WriteLine($"FTP Host: {FtpHost}");
 
             if (string.IsNullOrEmpty(FtpUser))
             {
-                Write($"Missing FTP User", ConsoleColor.Red);
+                Console.WriteLine($"Missing FTP User");
                 isInputsValid = false;
             }
-            Write($"FTP User: {FtpUser}", ConsoleColor.Blue);
+            Console.WriteLine($"FTP User: {FtpUser}");
 
             if (string.IsNullOrEmpty(FtpPassword))
             {
-                Write($"Missing FTP Password", ConsoleColor.Red);
+                Console.WriteLine($"Missing FTP Password");
                 isInputsValid = false;
             }
-            Write($"FTP Password: {FtpPassword}", ConsoleColor.Blue);
+            Console.WriteLine($"FTP Password: {FtpPassword}");
 
             if (string.IsNullOrEmpty(FtpRemote))
             {
                 FtpRemote = @"/site/wwwroot";
             }
-            Write($"FTP Remote: {FtpRemote}", ConsoleColor.Blue);
+            Console.WriteLine($"FTP Remote: {FtpRemote}");
 
             if (string.IsNullOrEmpty(MySqlServer))
             {
-                Write($"Missing DB Server", ConsoleColor.Red);
+                Console.WriteLine($"Missing DB Server");
                 isInputsValid = false;
             }
-            Write($"DB Server: {MySqlServer}", ConsoleColor.Blue);
+            Console.WriteLine($"DB Server: {MySqlServer}");
 
             if (string.IsNullOrEmpty(MySqlDatabase))
             {
-                Write($"Missing DB Database Name", ConsoleColor.Red);
+                Console.WriteLine($"Missing DB Database Name");
                 isInputsValid = false;
             }
-            Write($"DB Database Name: {MySqlDatabase}", ConsoleColor.Blue);
+            Console.WriteLine($"DB Database Name: {MySqlDatabase}");
 
             if (string.IsNullOrEmpty(MySqlUser))
             {
-                Write($"Missing DB User Name", ConsoleColor.Red);
+                Console.WriteLine($"Missing DB User Name");
                 isInputsValid = false;
             }
-            Write($"DB User Name: {MySqlUser}", ConsoleColor.Blue);
+            Console.WriteLine($"DB User Name: {MySqlUser}");
 
             if (string.IsNullOrEmpty(MySqlPassword))
             {
-                Write($"Missing DB Password", ConsoleColor.Red);
+                Console.WriteLine($"Missing DB Password");
                 isInputsValid = false;
             }
-            Write($"DB Password: {MySqlPassword}", ConsoleColor.Blue);
+            Console.WriteLine($"DB Password: {MySqlPassword}");
 
 
             if (!string.IsNullOrEmpty(AzStorageConnectionString)
                 && !string.IsNullOrEmpty(AzStorageContainerName))
             {
-                Write($"Backing Up to Azure", ConsoleColor.Green);
-                Write($"Azure Storage Connection String: {AzStorageConnectionString}", ConsoleColor.Blue);
-                Write($"Azure Storage Container Name: {AzStorageContainerName}", ConsoleColor.Blue);
+                Console.WriteLine($"Backing Up to Azure");
+                Console.WriteLine($"Azure Storage Connection String: {AzStorageConnectionString}");
+                Console.WriteLine($"Azure Storage Container Name: {AzStorageContainerName}");
             }
             else if (!string.IsNullOrEmpty(AzStorageConnectionString)
                 || !string.IsNullOrEmpty(AzStorageContainerName))
             {
-                Write($"Missing Azure Upload Setting", ConsoleColor.Red);
-                Write($"Azure Storage Connection String: {AzStorageConnectionString}", ConsoleColor.Blue);
-                Write($"Azure Storage Container Name: {AzStorageContainerName}", ConsoleColor.Blue);
+                Console.WriteLine($"Missing Azure Upload Setting");
+                Console.WriteLine($"Azure Storage Connection String: {AzStorageConnectionString}");
+                Console.WriteLine($"Azure Storage Container Name: {AzStorageContainerName}");
                 isInputsValid = false;
             }
 
             if (isInputsValid)
             {
-                Write($"Creating Backup {BackupFile}!", ConsoleColor.Green);
+                Console.WriteLine($"Creating Backup {BackupFile}!");
 
                 RetryPolicy = Policy
                   .Handle<Exception>()
                   .WaitAndRetry(
                       Retrys,
                       (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
-                      (exception, timeSpan, retryCount, context) => Write($"Retry {retryCount} : {exception.Message}", ConsoleColor.Red));
+                      (exception, timeSpan, retryCount, context) => Console.WriteLine($"Retry {retryCount} : {exception.Message}"));
 
                 RetryPolicyAsync = Policy
                   .Handle<Exception>()
                   .WaitAndRetryAsync(
                       Retrys,
                       (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
-                      (exception, timeSpan, retryCount, context) => Write($"Retry {retryCount} : {exception.Message}", ConsoleColor.Red));
+                      (exception, timeSpan, retryCount, context) => Console.WriteLine($"Retry {retryCount} : {exception.Message}"));
 
                 BackupApplication().Wait();
                 BackupDatabase();
@@ -275,7 +275,7 @@ namespace WordPressBackup
             }
             else
             {
-                Write($"Invalid Inputs, cannot create backup!", ConsoleColor.Red);
+                Console.WriteLine($"Invalid Inputs, cannot create backup!");
             }
 
             stopwatch.Stop();
@@ -289,18 +289,18 @@ namespace WordPressBackup
         {
             RetryPolicy.Execute(() =>
             {
-                Write($"Starting Backup Compression", ConsoleColor.Yellow);
+                Console.WriteLine($"Starting Backup Compression");
 
                 if (File.Exists(BackupZipFile))
                     File.Delete(BackupZipFile);
 
                 ZipFile.CreateFromDirectory(BackupFolder, BackupZipFile, CompressionLevel.Optimal, false);
 
-                Write($"Backup Compression Complete!", ConsoleColor.Green);
+                Console.WriteLine($"Backup Compression Complete!");
 
                 Directory.Delete(BackupFolder, true);
 
-                Write($"Temp Files Cleaned up!", ConsoleColor.Green);
+                Console.WriteLine($"Temp Files Cleaned up!");
 
             });
         }
@@ -316,7 +316,7 @@ namespace WordPressBackup
             RetryPolicy.Execute(() =>
             {
 
-                Write($"Starting Database Backup", ConsoleColor.Yellow);
+                Console.WriteLine($"Starting Database Backup");
 
                 if (File.Exists(file))
                     File.Delete(file);
@@ -339,9 +339,9 @@ namespace WordPressBackup
 
                     conn.Close();
                 }
-                
 
-                Write($"Database Backup Complete!", ConsoleColor.Green);
+
+                Console.WriteLine($"Database Backup Complete!");
             });
         }
 
@@ -352,7 +352,7 @@ namespace WordPressBackup
             {
                 await RetryPolicyAsync.ExecuteAsync(async () =>
                 {
-                    Write($"Starting Azure Upload!", ConsoleColor.Green);
+                    Console.WriteLine($"Starting Azure Upload!");
                     CloudStorageAccount storageAccount = null;
 
                     if (CloudStorageAccount.TryParse(AzStorageConnectionString, out storageAccount))
@@ -364,7 +364,7 @@ namespace WordPressBackup
                         await cloudBlockBlob.UploadFromFileAsync(BackupZipFile);
                     }
 
-                    Write($"Finished Azure Upload!", ConsoleColor.Green);
+                    Console.WriteLine($"Finished Azure Upload!");
                 });
             }
         }
@@ -427,7 +427,7 @@ namespace WordPressBackup
                             }
                         }
 
-                        Write($"Found {filesInRemote.Count} Files in {currentFolderRemote}", ConsoleColor.Yellow);
+                        Console.WriteLine($"Found {filesInRemote.Count} Files in {currentFolderRemote}");
 
                         //Send the entire list of files to be downloaded to the download method
                         downloads.Add(DownloadFiles(filesInRemote, currentFolderLocal));
@@ -448,7 +448,7 @@ namespace WordPressBackup
                 var total = downloads.Count();
                 var done = downloads.Count(x => x.IsCompleted);
 
-                Write($"Waiting for all file downloads to complete {done} of {total} in {waitTimer.Elapsed:c}.", ConsoleColor.Green);
+                Console.WriteLine($"Waiting for all file downloads to complete {done} of {total} in {waitTimer.Elapsed:c}.");
                 await Task.Delay(5000);
             }
         }
@@ -470,30 +470,13 @@ namespace WordPressBackup
                         client.Connect();
 
                         await client.DownloadFilesAsync(destination, files)
-                             .ContinueWith(t => Write($"Downloaded {t.Result} files to {destination}", ConsoleColor.Green));
+                             .ContinueWith(t => Console.WriteLine($"Downloaded {t.Result} files to {destination}"));
 
                         client.Disconnect();
                     }
                 });
             }
         }
-
-        /// <summary>
-        /// Log a message in a given color to the console.
-        /// 
-        /// Since the app does alot of work in parallel, need to lock between changing the color and writing
-        /// out the message, or there could be a race condition.
-        /// </summary>
-        /// <param name="message"></param>
-        /// <param name="color"></param>
-        private void Write(string message, ConsoleColor color)
-        {
-            lock (Console.Out)
-            {
-                Console.ForegroundColor = color;
-                Console.WriteLine(message);
-                Console.ResetColor();
-            }
-        }
+        
     }
 }
