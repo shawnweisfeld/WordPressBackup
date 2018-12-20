@@ -271,10 +271,18 @@ namespace WordPressBackup
                       (exception, timeSpan, retryCount, context) => Console.WriteLine($"Retry {retryCount} : {exception.Message}")),
                   Policy.TimeoutAsync(120));
 
-                BackupApplication().Wait();
-                BackupDatabase();
-                ZipBackup();
-                UploadToAzure().Wait();
+                try
+                {
+                    BackupApplication().Wait();
+                    BackupDatabase();
+                    ZipBackup();
+                    UploadToAzure().Wait();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Backup Error: {ex}");
+                }
+
             }
             else
             {
