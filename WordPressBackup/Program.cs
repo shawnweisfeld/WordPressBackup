@@ -318,6 +318,15 @@ namespace WordPressBackup
 
             stopwatch.Stop();
             Log($"{BackupFile} Done in {stopwatch.Elapsed:c}!");
+
+            if (_telemetryClient != null)
+            {
+                // before exit, flush the remaining data
+                _telemetryClient.Flush();
+
+                // flush is not blocking so wait a bit
+                Task.Delay(5000).Wait();
+            }
         }
 
         /// <summary>
@@ -556,6 +565,7 @@ namespace WordPressBackup
             {
                 _telemetryClient.TrackTrace(message, sev, new Dictionary<string, string>()
                 {
+                    {"Run", _run },
                     {"Backup", BackupFile}
                 });
             }
@@ -569,6 +579,7 @@ namespace WordPressBackup
             {
                 _telemetryClient.TrackException(ex, new Dictionary<string, string>()
                 {
+                    {"Run", _run },
                     {"Backup", BackupFile}
                 });
             }
