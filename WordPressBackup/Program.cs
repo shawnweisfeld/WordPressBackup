@@ -389,7 +389,7 @@ namespace WordPressBackup
 
             // Tasks downloading the files in the folders
             // this gives us lots of parallelism on the downloads
-            var downloads = new List<Task>();
+            //var downloads = new List<Task>();
 
             // Push the root folder onto the stack
             folders.Push(FtpRemote);
@@ -404,6 +404,9 @@ namespace WordPressBackup
 
                 await RetryPolicyAsync.ExecuteAsync(async () =>
                 {
+                    var sw = new Stopwatch();
+                    sw.Start();
+
                     // Create the local clone of a sub folder if needed
                     if (!Directory.Exists(currentFolderLocal))
                         Directory.CreateDirectory(currentFolderLocal);
@@ -430,7 +433,11 @@ namespace WordPressBackup
                         Console.WriteLine($"Found {filesInRemote.Count} Files in {currentFolderRemote}");
 
                         //Send the entire list of files to be downloaded to the download method
-                        downloads.Add(DownloadFiles(filesInRemote, currentFolderLocal));
+                        //downloads.Add(DownloadFiles(filesInRemote, currentFolderLocal));
+
+                        var downloadedCount = await client.DownloadFilesAsync(currentFolderLocal, filesInRemote);
+
+                        Console.WriteLine($"Downloaded {downloadedCount} of {filesInRemote.Count} files to {currentFolderLocal} in {sw.Elapsed:c}");
 
                         client.Disconnect();
                     }
@@ -439,18 +446,18 @@ namespace WordPressBackup
 
 
             //Wait for all the downloads to complete before exiting
-            var allDone = Task.WhenAll(downloads.ToArray());
-            var waitTimer = new Stopwatch();
-            waitTimer.Start();
+            //var allDone = Task.WhenAll(downloads.ToArray());
+            //var waitTimer = new Stopwatch();
+            //waitTimer.Start();
 
-            while (!allDone.IsCompleted)
-            {
-                var total = downloads.Count();
-                var done = downloads.Count(x => x.IsCompleted);
+            //while (!allDone.IsCompleted)
+            //{
+            //    var total = downloads.Count();
+            //    var done = downloads.Count(x => x.IsCompleted);
 
-                Console.WriteLine($"Waiting for all file downloads to complete {done} of {total} in {waitTimer.Elapsed:c}.");
-                await Task.Delay(5000);
-            }
+            //    Console.WriteLine($"Waiting for all file downloads to complete {done} of {total} in {waitTimer.Elapsed:c}.");
+            //    await Task.Delay(5000);
+            //}
         }
 
         /// <summary>
@@ -459,24 +466,24 @@ namespace WordPressBackup
         /// <param name="files"></param>
         /// <param name="destination"></param>
         /// <returns></returns>
-        private async Task DownloadFiles(IEnumerable<string> files, string destination)
-        {
-            if (files.Any())
-            {
-                await RetryPolicyAsync.ExecuteAsync(async () =>
-                {
-                    using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
-                    {
-                        client.Connect();
+        //private async Task DownloadFiles(IEnumerable<string> files, string destination)
+        //{
+        //    if (files.Any())
+        //    {
+        //        await RetryPolicyAsync.ExecuteAsync(async () =>
+        //        {
+        //            using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
+        //            {
+        //                client.Connect();
 
-                        await client.DownloadFilesAsync(destination, files)
-                             .ContinueWith(t => Console.WriteLine($"Downloaded {t.Result} files to {destination}"));
+        //                await client.DownloadFilesAsync(destination, files)
+        //                     .ContinueWith(t => Console.WriteLine($"Downloaded {t.Result} files to {destination}"));
 
-                        client.Disconnect();
-                    }
-                });
-            }
-        }
+        //                client.Disconnect();
+        //            }
+        //        });
+        //    }
+        //}
         
     }
 }
