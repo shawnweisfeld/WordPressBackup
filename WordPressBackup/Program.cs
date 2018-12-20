@@ -481,7 +481,7 @@ namespace WordPressBackup
                         {
                             client.Connect();
 
-                            await client.DownloadFilesAsync(destination, files, true, FtpVerify.Throw, FtpError.None, ct)
+                            await client.DownloadFilesAsync(destination, chunk, true, FtpVerify.Throw, FtpError.None, ct)
                                  .ContinueWith(t => Console.WriteLine($"Downloaded {t.Result} files to {destination}"));
 
                             client.Disconnect();
