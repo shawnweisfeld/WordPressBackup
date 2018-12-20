@@ -472,19 +472,42 @@ namespace WordPressBackup
         {
             if (files.Any())
             {
-                var cancellationToken = new CancellationToken();
-                await RetryPolicyAsync.ExecuteAsync(async ct =>
+                foreach (var chunk in Chunk(files, 10))
                 {
-                    using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
+                    var cancellationToken = new CancellationToken();
+                    await RetryPolicyAsync.ExecuteAsync(async ct =>
                     {
-                        client.Connect();
+                        using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
+                        {
+                            client.Connect();
 
-                        await client.DownloadFilesAsync(destination, files, true, FtpVerify.None, FtpError.None, ct)
-                             .ContinueWith(t => Console.WriteLine($"Downloaded {t.Result} files to {destination}"));
+                            await client.DownloadFilesAsync(destination, files, true, FtpVerify.Throw, FtpError.None, ct)
+                                 .ContinueWith(t => Console.WriteLine($"Downloaded {t.Result} files to {destination}"));
 
-                        client.Disconnect();
-                    }
-                }, cancellationToken);
+                            client.Disconnect();
+                        }
+                    }, cancellationToken);
+                }
+            }
+        }
+
+        public static IEnumerable<IEnumerable<T>> Chunk<T>(IEnumerable<T> source, int chunksize)
+        {
+            var temp = new List<T>();
+            foreach (var item in source)
+            {
+                temp.Add(item);
+
+                if (temp.Count == chunksize)
+                {
+                    yield return temp;
+                    temp.Clear();
+                }
+            }
+
+            if (temp.Any())
+            {
+                yield return temp;
             }
         }
 
