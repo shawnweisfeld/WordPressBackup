@@ -480,8 +480,10 @@ namespace WordPressBackup
         {
             if (files.Any())
             {
+                int batchNum = 0;
                 foreach (var chunk in Chunk(files, 10))
                 {
+                    batchNum++;
                     var cancellationToken = new CancellationToken();
                     await RetryPolicyAsync.ExecuteAsync(async ct =>
                     {
@@ -490,7 +492,7 @@ namespace WordPressBackup
                             client.Connect();
 
                             await client.DownloadFilesAsync(destination, chunk, true, FtpVerify.Throw, FtpError.None, ct)
-                                 .ContinueWith(t => Console.WriteLine($"Downloaded {t.Result} files to {destination}"));
+                                 .ContinueWith(t => Console.WriteLine($"Downloaded {t.Result} files in Batch {batchNum} to {destination}"));
 
                             client.Disconnect();
                         }
