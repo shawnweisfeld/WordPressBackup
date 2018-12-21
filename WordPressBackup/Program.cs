@@ -483,11 +483,11 @@ namespace WordPressBackup
                         client.Disconnect();
                     }
                 });
-
-                Log("FTP File/Folder Scan complete, waiting for file downloads to finish.");
-
-                await Task.WhenAll(downloads.ToArray());
             }
+
+            Log("FTP File/Folder Scan complete, waiting for file downloads to finish.");
+
+            await Task.WhenAll(downloads.ToArray());
         }
 
         private async Task DownloadFiles(string currentFolderLocal, List<string> filesInRemote)
