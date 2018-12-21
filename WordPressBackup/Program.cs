@@ -448,10 +448,10 @@ namespace WordPressBackup
                 foldersProcesed++;
                 var currentFolderRemote = folders.Pop();
                 var currentFolderLocal = FtpLocal + currentFolderRemote.Substring(remotelen);
-                var filesInRemote = new List<string>();
-
+                
                 await RetryPolicyAsync.ExecuteAsync(async () =>
                 {
+                    var filesInRemote = new List<string>();
                     var sw = new Stopwatch();
                     sw.Start();
 
@@ -469,7 +469,8 @@ namespace WordPressBackup
                             if (item.Type == FtpFileSystemObjectType.Directory)
                             {
                                 //Send folders to get processed in this thread
-                                folders.Push(item.FullName);
+                                if (!folders.Contains(item.FullName))
+                                    folders.Push(item.FullName);
                             }
                             else if (item.Type == FtpFileSystemObjectType.File)
                             {
@@ -478,79 +479,26 @@ namespace WordPressBackup
                             }
                         }
 
-                        Log($"Found {filesInRemote.Count} Files in {currentFolderRemote}");
 
-                        //Send the entire list of files to be downloaded to the download method
-                        //downloads.Add(DownloadFiles(filesInRemote, currentFolderLocal));
+                        if (filesInRemote.Any())
+                        {
+                            int batchNum = 0;
+                            foreach (var chunk in Chunk(filesInRemote, 10))
+                            {
+                                batchNum++;
 
-                        await DownloadFiles(filesInRemote, currentFolderLocal, client, cancellationToken);
+                                var downloadedCount = await client.DownloadFilesAsync(currentFolderLocal, chunk, true, FtpVerify.Throw, FtpError.Throw, cancellationToken);
+
+                                Log($"Downloaded {downloadedCount} files in Batch {batchNum} to {currentFolderLocal}");
+                            }
+                        }
 
                         client.Disconnect();
                     }
                 });
             }
-
-
-            //Wait for all the downloads to complete before exiting
-            //var allDone = Task.WhenAll(downloads.ToArray());
-            //var waitTimer = new Stopwatch();
-            //waitTimer.Start();
-
-            //while (!allDone.IsCompleted)
-            //{
-            //    var total = downloads.Count();
-            //    var done = downloads.Count(x => x.IsCompleted);
-
-            //    Log($"Waiting for all file downloads to complete {done} of {total} in {waitTimer.Elapsed:c}.");
-            //    await Task.Delay(5000);
-            //}
         }
 
-        /// <summary>
-        /// Use FTP to download the list of files to the given folder.
-        /// </summary>
-        /// <param name="files"></param>
-        /// <param name="destination"></param>
-        /// <returns></returns>
-        private async Task DownloadFiles(IEnumerable<string> files, string destination, FtpClient client, CancellationToken ct)
-        {
-            if (files.Any())
-            {
-                int batchNum = 0;
-                foreach (var chunk in Chunk(files, 10))
-                {
-                    batchNum++;
-            
-                    await client.DownloadFilesAsync(destination, chunk, true, FtpVerify.Throw, FtpError.None, ct)
-                            .ContinueWith(t => Log($"Downloaded {t.Result} files in Batch {batchNum} to {destination}"));
-                }
-            }
-        }
-
-        private async Task DownloadFiles(IEnumerable<string> files, string destination)
-        {
-            if (files.Any())
-            {
-                int batchNum = 0;
-                foreach (var chunk in Chunk(files, 10))
-                {
-                    batchNum++;
-                    var cancellationToken = new CancellationToken();
-                    await RetryPolicyAsync.ExecuteAsync(async ct =>
-                    {
-                        using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
-                        {
-                            client.Connect();
-
-                            await client.DownloadFilesAsync(destination, chunk, true, FtpVerify.Throw, FtpError.None, ct)
-                                 .ContinueWith(t => Log($"Downloaded {t.Result} files in Batch {batchNum} to {destination}"));
-
-                            client.Disconnect();
-                        }
-                    }, cancellationToken);
-                }
-            }
-        }
 
         public static IEnumerable<IEnumerable<T>> Chunk<T>(IEnumerable<T> source, int chunksize)
         {
