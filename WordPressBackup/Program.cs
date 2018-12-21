@@ -436,7 +436,7 @@ namespace WordPressBackup
 
             // Tasks downloading the files in the folders
             // this gives us lots of parallelism on the downloads
-            var downloads = new List<Task>();
+            var downloads = new List<Action>();
 
             // Push the root folder onto the stack
             folders.Push(FtpRemote);
@@ -478,44 +478,46 @@ namespace WordPressBackup
                             }
                         }
 
-                        downloads.Add(DownloadFiles(currentFolderLocal, filesInRemote));
+                        Log($"Found {filesInRemote.Count} files in {currentFolderLocal}");
 
-                        client.Disconnect();
-                    }
-                });
-            }
-
-            Log("FTP File/Folder Scan complete, waiting for file downloads to finish.");
-
-            await Task.WhenAll(downloads.ToArray());
-        }
-
-        private async Task DownloadFiles(string currentFolderLocal, List<string> filesInRemote)
-        {
-            if (filesInRemote.Any())
-            {
-                await RetryPolicyAsync.ExecuteAsync(async () =>
-                {
-                    using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
-                    {
-                        client.Connect();
-                        var cancellationToken = new CancellationToken();
-
-                        int batchNum = 0;
-                        foreach (var chunk in Chunk(filesInRemote, 10))
+                        if (filesInRemote.Any())
                         {
-                            batchNum++;
+                            downloads.Add(() =>
+                            {
+                                RetryPolicyAsync.Execute(() =>
+                                {
+                                    using (FtpClient client2 = new FtpClient(FtpHost, FtpUser, FtpPassword))
+                                    {
+                                        client2.Connect();
 
-                            var downloadedCount = await client.DownloadFilesAsync(currentFolderLocal, chunk, true, FtpVerify.Throw, FtpError.Throw, cancellationToken);
+                                        int batchNum = 0;
+                                        foreach (var chunk in Chunk(filesInRemote, 10))
+                                        {
+                                            batchNum++;
 
-                            Log($"Downloaded {downloadedCount} files in Batch {batchNum} to {currentFolderLocal}");
+                                            var downloadedCount = client.DownloadFiles(currentFolderLocal, chunk, true, FtpVerify.Throw, FtpError.Throw);
+
+                                            Log($"Downloaded {downloadedCount} files in Batch {batchNum} to {currentFolderLocal}");
+                                        }
+
+                                        client2.Disconnect();
+                                    }
+                                });
+                            });
                         }
 
+
                         client.Disconnect();
                     }
                 });
             }
+
+            Log("FTP File/Folder Scan complete, downloading files.");
+
+            var options = new ParallelOptions { MaxDegreeOfParallelism = 5 };
+            Parallel.Invoke(options, downloads.ToArray());
         }
+
 
         public static IEnumerable<IEnumerable<T>> Chunk<T>(IEnumerable<T> source, int chunksize)
         {
