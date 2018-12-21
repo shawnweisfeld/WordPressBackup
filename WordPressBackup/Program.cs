@@ -279,10 +279,10 @@ namespace WordPressBackup
                       Retrys,
                       (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
                       (exception, timeSpan, retryCount, context) =>
-                        {
-                            Log($"Retry {retryCount} : {exception.Message}");
-                            Log(exception);
-                        }),
+                      {
+                          Log($"Retry {retryCount} : {exception.Message}");
+                          Log(exception);
+                      }),
                   Policy.Timeout(300));
 
                 RetryPolicyAsync = Policy.WrapAsync(Policy
@@ -359,6 +359,7 @@ namespace WordPressBackup
         {
             var constring = $"server={MySqlServer};user={MySqlUser};pwd={MySqlPassword};database={MySqlDatabase};charset=utf8;convertzerodatetime=true;";
             var file = Path.Combine(BackupFolder, "db.sql");
+            var file2 = Path.Combine(BackupFolder, "db-clean.sql");
 
             RetryPolicy.Execute(() =>
             {
@@ -376,17 +377,18 @@ namespace WordPressBackup
                     cmd.CommandTimeout = 0;
                     conn.Open();
 
-                    // there is an export to file function on the MySqlBackup library
-                    // however the export it made would not reimport
-                    // I was seeing the following error when importing into MySQL using Workbench
-                    //   ASCII '\0' appeared in the statement, but this is not allowed unless option --binary-mode is enabled and mysql is run in non-interactive mode. Set --binary-mode to 1 if ASCII '\0' is expected.
-                    // finally decided to just remove all the \0 characters and the import worked fine.
-                    // Hopefully they are not important (eek!)
-                    File.WriteAllText(file, mb.ExportToString().Replace("\0", ""), Encoding.UTF8);
+                    mb.ExportToFile(file);
 
                     conn.Close();
                 }
 
+                // Using the MySqlBackup library the export it made would not reimport
+                // I was seeing the following error when importing into MySQL using Workbench
+                //   ASCII '\0' appeared in the statement, but this is not allowed unless option --binary-mode is enabled and mysql is run in non-interactive mode. Set --binary-mode to 1 if ASCII '\0' is expected.
+                // remove all the \0 characters and the import worked fine.
+                // Hopefully they are not important (eek!)
+                File.WriteAllLines(file2, File.ReadAllLines(file)
+                    .Select(x => x.Replace("\0", "")), Encoding.UTF8);
 
                 Log($"Database Backup Complete!");
             });
@@ -423,6 +425,7 @@ namespace WordPressBackup
         private async Task BackupApplication()
         {
             int foldersProcesed = 0;
+            var cancellationToken = new CancellationToken();
 
             //Delete the local temp directory if it already exists.
             if (Directory.Exists(FtpLocal))
@@ -434,10 +437,6 @@ namespace WordPressBackup
             // using a stack to eliminate recursion
             var folders = new Stack<string>();
 
-            // Tasks downloading the files in the folders
-            // this gives us lots of parallelism on the downloads
-            var downloads = new List<Action>();
-
             // Push the root folder onto the stack
             folders.Push(FtpRemote);
 
@@ -447,7 +446,7 @@ namespace WordPressBackup
                 foldersProcesed++;
                 var currentFolderRemote = folders.Pop();
                 var currentFolderLocal = FtpLocal + currentFolderRemote.Substring(remotelen);
-                
+
                 await RetryPolicyAsync.ExecuteAsync(async () =>
                 {
                     var filesInRemote = new List<string>();
@@ -478,44 +477,24 @@ namespace WordPressBackup
                             }
                         }
 
-                        Log($"Found {filesInRemote.Count} files in {currentFolderLocal}");
 
                         if (filesInRemote.Any())
                         {
-                            downloads.Add(() =>
+                            int batchNum = 0;
+                            foreach (var chunk in Chunk(filesInRemote, 10))
                             {
-                                RetryPolicy.Execute(() =>
-                                {
-                                    using (FtpClient client2 = new FtpClient(FtpHost, FtpUser, FtpPassword))
-                                    {
-                                        client2.Connect();
+                                batchNum++;
 
-                                        int batchNum = 0;
-                                        foreach (var chunk in Chunk(filesInRemote, 10))
-                                        {
-                                            batchNum++;
+                                var downloadedCount = await client.DownloadFilesAsync(currentFolderLocal, chunk, true, FtpVerify.Throw, FtpError.Throw, cancellationToken);
 
-                                            var downloadedCount = client.DownloadFiles(currentFolderLocal, chunk, true, FtpVerify.Throw, FtpError.Throw);
-
-                                            Log($"Downloaded {downloadedCount} files in Batch {batchNum} to {currentFolderLocal}");
-                                        }
-
-                                        client2.Disconnect();
-                                    }
-                                });
-                            });
+                                Log($"Downloaded {downloadedCount} files in Batch {batchNum} to {currentFolderLocal}");
+                            }
                         }
-
 
                         client.Disconnect();
                     }
                 });
             }
-
-            Log("FTP File/Folder Scan complete, downloading files.");
-
-            var options = new ParallelOptions { MaxDegreeOfParallelism = 5 };
-            Parallel.Invoke(options, downloads.ToArray());
         }
 
 
