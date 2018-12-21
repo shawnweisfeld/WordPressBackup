@@ -423,7 +423,6 @@ namespace WordPressBackup
         private async Task BackupApplication()
         {
             int foldersProcesed = 0;
-            var cancellationToken = new CancellationToken();
 
             //Delete the local temp directory if it already exists.
             if (Directory.Exists(FtpLocal))
@@ -479,18 +478,37 @@ namespace WordPressBackup
                             }
                         }
 
+                        downloads.Add(DownloadFiles(currentFolderLocal, filesInRemote));
 
-                        if (filesInRemote.Any())
+                        client.Disconnect();
+                    }
+                });
+
+                Log("FTP File/Folder Scan complete, waiting for file downloads to finish.");
+
+                await Task.WhenAll(downloads.ToArray());
+            }
+        }
+
+        private async Task DownloadFiles(string currentFolderLocal, List<string> filesInRemote)
+        {
+            if (filesInRemote.Any())
+            {
+                await RetryPolicyAsync.ExecuteAsync(async () =>
+                {
+                    using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
+                    {
+                        client.Connect();
+                        var cancellationToken = new CancellationToken();
+
+                        int batchNum = 0;
+                        foreach (var chunk in Chunk(filesInRemote, 10))
                         {
-                            int batchNum = 0;
-                            foreach (var chunk in Chunk(filesInRemote, 10))
-                            {
-                                batchNum++;
+                            batchNum++;
 
-                                var downloadedCount = await client.DownloadFilesAsync(currentFolderLocal, chunk, true, FtpVerify.Throw, FtpError.Throw, cancellationToken);
+                            var downloadedCount = await client.DownloadFilesAsync(currentFolderLocal, chunk, true, FtpVerify.Throw, FtpError.Throw, cancellationToken);
 
-                                Log($"Downloaded {downloadedCount} files in Batch {batchNum} to {currentFolderLocal}");
-                            }
+                            Log($"Downloaded {downloadedCount} files in Batch {batchNum} to {currentFolderLocal}");
                         }
 
                         client.Disconnect();
@@ -498,7 +516,6 @@ namespace WordPressBackup
                 });
             }
         }
-
 
         public static IEnumerable<IEnumerable<T>> Chunk<T>(IEnumerable<T> source, int chunksize)
         {
