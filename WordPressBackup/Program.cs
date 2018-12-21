@@ -484,7 +484,7 @@ namespace WordPressBackup
                         {
                             downloads.Add(() =>
                             {
-                                RetryPolicyAsync.Execute(() =>
+                                RetryPolicy.Execute(() =>
                                 {
                                     using (FtpClient client2 = new FtpClient(FtpHost, FtpUser, FtpPassword))
                                     {
