@@ -14,11 +14,12 @@ namespace WordPressBackup
         private string FtpHost { get; set; }
         private string FtpUser { get; set; }
         private string FtpPassword { get; set; }
-        public int FolderLimit { get; set; }
-        public int DownloadChunkFileCount { get; set; }
-        public Logger Logger { get; set; }
+        private int FolderLimit { get; set; }
+        private int DownloadChunkFileCount { get; set; }
+        private Logger Logger { get; set; }
+        private PolicyHelper Policy { get; set; }
 
-        public FtpHelper(string ftpHost, string ftpUser, string ftpPassword, Logger log, int folderLimit = int.MaxValue, int downloadChunkFileCount = 10)
+        public FtpHelper(string ftpHost, string ftpUser, string ftpPassword, Logger log, PolicyHelper policy, int folderLimit, int downloadChunkFileCount)
         {
             FtpHost = ftpHost;
             FtpUser = ftpUser;
@@ -61,42 +62,45 @@ namespace WordPressBackup
 
                 Logger.Log($"Processing {currentFolderRemote}");
 
-                // FTP into the server and get a list of all the files and folders that exist
-                using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
+                await Policy.PolicyAsync().ExecuteAsync(async () =>
                 {
-                    await client.ConnectAsync();
-
-                    foreach (var item in await client.GetListingAsync(currentFolderRemote))
+                    // FTP into the server and get a list of all the files and folders that exist
+                    using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
                     {
-                        if (item.Type == FtpFileSystemObjectType.Directory)
+                        await client.ConnectAsync();
+
+                        foreach (var item in await client.GetListingAsync(currentFolderRemote))
                         {
-                            //Send folders to get processed in this thread
-                            if (!folders.Contains(item.FullName))
-                                folders.Push(item.FullName);
+                            if (item.Type == FtpFileSystemObjectType.Directory)
+                            {
+                                //Send folders to get processed in this thread
+                                if (!folders.Contains(item.FullName))
+                                    folders.Push(item.FullName);
+                            }
+                            else if (item.Type == FtpFileSystemObjectType.File)
+                            {
+                                //Build a list of files in this folder
+                                filesInRemote.Add(item.FullName);
+                            }
                         }
-                        else if (item.Type == FtpFileSystemObjectType.File)
+
+
+                        if (filesInRemote.Any())
                         {
-                            //Build a list of files in this folder
-                            filesInRemote.Add(item.FullName);
+                            int batchNum = 0;
+                            foreach (var chunk in Chunk(filesInRemote, DownloadChunkFileCount))
+                            {
+                                batchNum++;
+
+                                var downloadedCount = await client.DownloadFilesAsync(currentFolderLocal, chunk);
+
+                                Logger.Log($"Downloaded {downloadedCount} files in Batch {batchNum} to {currentFolderLocal}");
+                            }
                         }
+
+                        await client.DisconnectAsync();
                     }
-
-
-                    if (filesInRemote.Any())
-                    {
-                        int batchNum = 0;
-                        foreach (var chunk in Chunk(filesInRemote, DownloadChunkFileCount))
-                        {
-                            batchNum++;
-
-                            var downloadedCount = await client.DownloadFilesAsync(currentFolderLocal, chunk);
-
-                            Logger.Log($"Downloaded {downloadedCount} files in Batch {batchNum} to {currentFolderLocal}");
-                        }
-                    }
-
-                    await client.DisconnectAsync();
-                }
+                });
             }
         }
 
