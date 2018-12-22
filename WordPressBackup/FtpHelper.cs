@@ -23,6 +23,7 @@ namespace WordPressBackup
             FtpHost = ftpHost;
             FtpUser = ftpUser;
             FtpPassword = FtpPassword;
+            Logger = log;
             FolderLimit = folderLimit;
             DownloadChunkFileCount = downloadChunkFileCount;
         }
