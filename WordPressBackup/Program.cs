@@ -38,22 +38,6 @@ namespace WordPressBackup
         private string _azStorageContainerName;
         private string _instrumentationKey;
 
-        /// <summary>
-        /// Polly Policy. This will retry on an error using an exponential backoff.
-        /// 
-        /// Use like so:
-        ///   RetryPolicy.Execute(() => { /* code goes here */ });
-        /// </summary>
-        public Policy RetryPolicy { get; private set; }
-
-        /// <summary>
-        /// Async Polly Policy. This will retry on an error using an exponential backoff.
-        /// 
-        /// Use like so:
-        ///   RetryPolicyAsync.ExecuteAsync(() => { /* code goes here */ });        
-        /// </summary>
-        public Policy RetryPolicyAsync { get; private set; }
-
         [Option("-folders", CommandOptionType.SingleValue,
             Description = @"OPTIONAL: This is for Debugging ONLY. The number of folders to look in on the ftp site.")]
         public string FoldersToProcessString { get => _foldersToProcessString ?? Environment.GetEnvironmentVariable("FoldersToProcess"); set => _foldersToProcessString = value; }
@@ -150,28 +134,22 @@ namespace WordPressBackup
             Description = @"OPTIONAL: Use ONLY if you want to send the logs to Application Insights. Application Insights Instrumentation Key")]
         public string InstrumentationKey { get => _instrumentationKey ?? Environment.GetEnvironmentVariable("InstrumentationKey"); set => _instrumentationKey = value; }
 
-        private TelemetryClient _telemetryClient = null;
-        private string _run = string.Empty;
+        public Logger Logger { get; set; }
 
         public Program()
         {
-            _run = Guid.NewGuid().ToString();
 
-            if (!string.IsNullOrEmpty(InstrumentationKey))
-            {
-                TelemetryConfiguration configuration = TelemetryConfiguration.Active;
-                configuration.InstrumentationKey = InstrumentationKey;
-                _telemetryClient = new TelemetryClient();
-            }
         }
 
         static void Main(string[] args)
         {
-            CommandLineApplication.Execute<Program>(args);
+            CommandLineApplication.ExecuteAsync<Program>(args);
         }
 
-        private void OnExecute()
+        private async Task OnExecuteAsync()
         {
+            Logger = new Logger(Guid.NewGuid().ToString(), BackupFile, InstrumentationKey);
+
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
             bool isInputsValid = true;
@@ -179,12 +157,12 @@ namespace WordPressBackup
             //Validate and Echo back parameters
             if (FoldersToProcess != int.MaxValue)
             {
-                Log($"TESTING MODE: only downloading {FoldersToProcess} folders.");
+                Logger.Log($"TESTING MODE: only downloading {FoldersToProcess} folders.");
             }
 
-            Log($"On Error Retrys: {Retrys}");
+            Logger.Log($"On Error Retrys: {Retrys}");
 
-            Log($"File: {BackupFile}");
+            Logger.Log($"File: {BackupFile}");
 
             if (string.IsNullOrEmpty(BackupWorkingDirectory))
             {
@@ -192,141 +170,112 @@ namespace WordPressBackup
             }
             else if (!Directory.Exists(BackupWorkingDirectory))
             {
-                Log($"Invalid Backup Directory: {BackupWorkingDirectory}");
+                Logger.Log($"Invalid Backup Directory: {BackupWorkingDirectory}");
                 isInputsValid = false;
             }
-            Log($"Backup Working Directory: {BackupWorkingDirectory}");
+            Logger.Log($"Backup Working Directory: {BackupWorkingDirectory}");
 
             if (string.IsNullOrEmpty(FtpHost))
             {
-                Log($"Missing FTP Host");
+                Logger.Log($"Missing FTP Host");
                 isInputsValid = false;
             }
-            Log($"FTP Host: {FtpHost}");
+            Logger.Log($"FTP Host: {FtpHost}");
 
             if (string.IsNullOrEmpty(FtpUser))
             {
-                Log($"Missing FTP User");
+                Logger.Log($"Missing FTP User");
                 isInputsValid = false;
             }
-            Log($"FTP User: {FtpUser}");
+            Logger.Log($"FTP User: {FtpUser}");
 
             if (string.IsNullOrEmpty(FtpPassword))
             {
-                Log($"Missing FTP Password");
+                Logger.Log($"Missing FTP Password");
                 isInputsValid = false;
             }
-            Log($"FTP Password: {FtpPassword}");
+            Logger.Log($"FTP Password: {FtpPassword}");
 
             if (string.IsNullOrEmpty(FtpRemote))
             {
                 FtpRemote = @"/site/wwwroot";
             }
-            Log($"FTP Remote: {FtpRemote}");
+            Logger.Log($"FTP Remote: {FtpRemote}");
 
             if (string.IsNullOrEmpty(MySqlServer))
             {
-                Log($"Missing DB Server");
+                Logger.Log($"Missing DB Server");
                 isInputsValid = false;
             }
-            Log($"DB Server: {MySqlServer}");
+            Logger.Log($"DB Server: {MySqlServer}");
 
             if (string.IsNullOrEmpty(MySqlDatabase))
             {
-                Log($"Missing DB Database Name");
+                Logger.Log($"Missing DB Database Name");
                 isInputsValid = false;
             }
-            Log($"DB Database Name: {MySqlDatabase}");
+            Logger.Log($"DB Database Name: {MySqlDatabase}");
 
             if (string.IsNullOrEmpty(MySqlUser))
             {
-                Log($"Missing DB User Name");
+                Logger.Log($"Missing DB User Name");
                 isInputsValid = false;
             }
-            Log($"DB User Name: {MySqlUser}");
+            Logger.Log($"DB User Name: {MySqlUser}");
 
             if (string.IsNullOrEmpty(MySqlPassword))
             {
-                Log($"Missing DB Password");
+                Logger.Log($"Missing DB Password");
                 isInputsValid = false;
             }
-            Log($"DB Password: {MySqlPassword}");
+            Logger.Log($"DB Password: {MySqlPassword}");
 
 
             if (!string.IsNullOrEmpty(AzStorageConnectionString)
                 && !string.IsNullOrEmpty(AzStorageContainerName))
             {
-                Log($"Backing Up to Azure");
-                Log($"Azure Storage Connection String: {AzStorageConnectionString}");
-                Log($"Azure Storage Container Name: {AzStorageContainerName}");
+                Logger.Log($"Backing Up to Azure");
+                Logger.Log($"Azure Storage Connection String: {AzStorageConnectionString}");
+                Logger.Log($"Azure Storage Container Name: {AzStorageContainerName}");
             }
             else if (!string.IsNullOrEmpty(AzStorageConnectionString)
                 || !string.IsNullOrEmpty(AzStorageContainerName))
             {
-                Log($"Missing Azure Upload Setting");
-                Log($"Azure Storage Connection String: {AzStorageConnectionString}");
-                Log($"Azure Storage Container Name: {AzStorageContainerName}");
+                Logger.Log($"Missing Azure Upload Setting");
+                Logger.Log($"Azure Storage Connection String: {AzStorageConnectionString}");
+                Logger.Log($"Azure Storage Container Name: {AzStorageContainerName}");
                 isInputsValid = false;
             }
 
             if (isInputsValid)
             {
-                Log($"Creating Backup {BackupFile}!");
-
-                RetryPolicy = Policy.Wrap(Policy
-                  .Handle<Exception>()
-                  .WaitAndRetry(
-                      Retrys,
-                      (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
-                      (exception, timeSpan, retryCount, context) =>
-                      {
-                          Log($"Retry {retryCount} : {exception.Message}");
-                          Log(exception);
-                      }),
-                  Policy.Timeout(300));
-
-                RetryPolicyAsync = Policy.WrapAsync(Policy
-                  .Handle<Exception>()
-                  .WaitAndRetryAsync(
-                      Retrys,
-                      (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
-                      (exception, timeSpan, retryCount, context) =>
-                      {
-                          Log($"Retry {retryCount} : {exception.Message}");
-                          Log(exception);
-                      }),
-                  Policy.TimeoutAsync(300));
+                Logger.Log($"Creating Backup {BackupFile}!");
 
                 try
                 {
-                    BackupApplication().Wait();
+                    var ftpHelper = new FtpHelper(FtpHost, FtpUser, FtpPassword, Logger, FoldersToProcess, 10);
+                    await ftpHelper.DownloadFolderAsync(FtpLocal, FtpRemote);
+
                     BackupDatabase();
                     ZipBackup();
-                    UploadToAzure().Wait();
+                    await UploadToAzure();
                 }
                 catch (Exception ex)
                 {
-                    Log($"Backup Error: {ex}");
-                    Log(ex);
+                    Logger.Log($"ERROR APP: {ex}");
+                    Logger.Log(ex);
                 }
 
             }
             else
             {
-                Log($"Invalid Inputs, cannot create backup!");
+                Logger.Log($"Invalid Inputs, cannot create backup!");
             }
 
             stopwatch.Stop();
-            Log($"{BackupFile} Done in {stopwatch.Elapsed:c}!");
+            Logger.Log($"{BackupFile} Done in {stopwatch.Elapsed:c}!");
 
-            if (_telemetryClient != null)
-            {
-                // before exit, flush the remaining data
-                _telemetryClient.Flush();
-
-                // flush is not blocking so wait a bit
-                Task.Delay(5000).Wait();
-            }
+            await Logger.Flush();
         }
 
         /// <summary>
@@ -334,22 +283,18 @@ namespace WordPressBackup
         /// </summary>
         private void ZipBackup()
         {
-            RetryPolicy.Execute(() =>
-            {
-                Log($"Starting Backup Compression");
+            Logger.Log($"Starting Backup Compression");
 
-                if (File.Exists(BackupZipFile))
-                    File.Delete(BackupZipFile);
+            if (File.Exists(BackupZipFile))
+                File.Delete(BackupZipFile);
 
-                ZipFile.CreateFromDirectory(BackupFolder, BackupZipFile, CompressionLevel.Optimal, false);
+            ZipFile.CreateFromDirectory(BackupFolder, BackupZipFile, CompressionLevel.Optimal, false);
 
-                Log($"Backup Compression Complete!");
+            Logger.Log($"Backup Compression Complete!");
 
-                Directory.Delete(BackupFolder, true);
+            Directory.Delete(BackupFolder, true);
 
-                Log($"Temp Files Cleaned up!");
-
-            });
+            Logger.Log($"Temp Files Cleaned up!");
         }
 
         /// <summary>
@@ -361,37 +306,33 @@ namespace WordPressBackup
             var file = Path.Combine(BackupFolder, "db.sql");
             var file2 = Path.Combine(BackupFolder, "db-clean.sql");
 
-            RetryPolicy.Execute(() =>
+            Logger.Log($"Starting Database Backup");
+
+            if (File.Exists(file))
+                File.Delete(file);
+
+            using (MySqlConnection conn = new MySqlConnection(constring))
+            using (MySqlCommand cmd = new MySqlCommand())
+            using (MySqlBackup mb = new MySqlBackup(cmd))
             {
+                cmd.Connection = conn;
+                cmd.CommandTimeout = 0;
+                conn.Open();
 
-                Log($"Starting Database Backup");
+                mb.ExportToFile(file);
 
-                if (File.Exists(file))
-                    File.Delete(file);
+                conn.Close();
+            }
 
-                using (MySqlConnection conn = new MySqlConnection(constring))
-                using (MySqlCommand cmd = new MySqlCommand())
-                using (MySqlBackup mb = new MySqlBackup(cmd))
-                {
-                    cmd.Connection = conn;
-                    cmd.CommandTimeout = 0;
-                    conn.Open();
+            // Using the MySqlBackup library the export it made would not reimport
+            // I was seeing the following error when importing into MySQL using Workbench
+            //   ASCII '\0' appeared in the statement, but this is not allowed unless option --binary-mode is enabled and mysql is run in non-interactive mode. Set --binary-mode to 1 if ASCII '\0' is expected.
+            // remove all the \0 characters and the import worked fine.
+            // Hopefully they are not important (eek!)
+            File.WriteAllLines(file2, File.ReadAllLines(file)
+                .Select(x => x.Replace("\0", "")), Encoding.UTF8);
 
-                    mb.ExportToFile(file);
-
-                    conn.Close();
-                }
-
-                // Using the MySqlBackup library the export it made would not reimport
-                // I was seeing the following error when importing into MySQL using Workbench
-                //   ASCII '\0' appeared in the statement, but this is not allowed unless option --binary-mode is enabled and mysql is run in non-interactive mode. Set --binary-mode to 1 if ASCII '\0' is expected.
-                // remove all the \0 characters and the import worked fine.
-                // Hopefully they are not important (eek!)
-                File.WriteAllLines(file2, File.ReadAllLines(file)
-                    .Select(x => x.Replace("\0", "")), Encoding.UTF8);
-
-                Log($"Database Backup Complete!");
-            });
+            Logger.Log($"Database Backup Complete!");
         }
 
         private async Task UploadToAzure()
@@ -399,150 +340,19 @@ namespace WordPressBackup
             if (!string.IsNullOrEmpty(AzStorageConnectionString)
                && !string.IsNullOrEmpty(AzStorageContainerName))
             {
-                await RetryPolicyAsync.ExecuteAsync(async () =>
+                Logger.Log($"Starting Azure Upload!");
+                CloudStorageAccount storageAccount = null;
+
+                if (CloudStorageAccount.TryParse(AzStorageConnectionString, out storageAccount))
                 {
-                    Log($"Starting Azure Upload!");
-                    CloudStorageAccount storageAccount = null;
-
-                    if (CloudStorageAccount.TryParse(AzStorageConnectionString, out storageAccount))
-                    {
-                        CloudBlobClient cloudBlobClient = storageAccount.CreateCloudBlobClient();
-                        var cloudBlobContainer = cloudBlobClient.GetContainerReference(AzStorageContainerName);
-                        await cloudBlobContainer.CreateIfNotExistsAsync();
-                        CloudBlockBlob cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference(Path.GetFileName(BackupZipFile));
-                        await cloudBlockBlob.UploadFromFileAsync(BackupZipFile);
-                    }
-
-                    Log($"Finished Azure Upload!");
-                });
-            }
-        }
-
-        /// <summary>
-        /// Use FTP to download the entire site.
-        /// </summary>
-        /// <returns></returns>
-        private async Task BackupApplication()
-        {
-            int foldersProcesed = 0;
-            var cancellationToken = new CancellationToken();
-
-            //Delete the local temp directory if it already exists.
-            if (Directory.Exists(FtpLocal))
-                Directory.Delete(FtpLocal, true);
-
-            var remotelen = FtpRemote.Length;
-
-            // Holds a list of folders that we need to traverse
-            // using a stack to eliminate recursion
-            var folders = new Stack<string>();
-
-            // Push the root folder onto the stack
-            folders.Push(FtpRemote);
-
-            // Start looping.
-            while (folders.Count > 0 && foldersProcesed < FoldersToProcess)
-            {
-                foldersProcesed++;
-                var currentFolderRemote = folders.Pop();
-                var currentFolderLocal = FtpLocal + currentFolderRemote.Substring(remotelen);
-
-                await RetryPolicyAsync.ExecuteAsync(async () =>
-                {
-                    var filesInRemote = new List<string>();
-                    var sw = new Stopwatch();
-                    sw.Start();
-
-                    // Create the local clone of a sub folder if needed
-                    if (!Directory.Exists(currentFolderLocal))
-                        Directory.CreateDirectory(currentFolderLocal);
-
-                    // FTP into the server and get a list of all the files and folders that exist
-                    using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
-                    {
-                        client.Connect();
-
-                        foreach (var item in await client.GetListingAsync(currentFolderRemote))
-                        {
-                            if (item.Type == FtpFileSystemObjectType.Directory)
-                            {
-                                //Send folders to get processed in this thread
-                                if (!folders.Contains(item.FullName))
-                                    folders.Push(item.FullName);
-                            }
-                            else if (item.Type == FtpFileSystemObjectType.File)
-                            {
-                                //Build a list of files in this folder
-                                filesInRemote.Add(item.FullName);
-                            }
-                        }
-
-
-                        if (filesInRemote.Any())
-                        {
-                            int batchNum = 0;
-                            foreach (var chunk in Chunk(filesInRemote, 10))
-                            {
-                                batchNum++;
-
-                                var downloadedCount = await client.DownloadFilesAsync(currentFolderLocal, chunk, true, FtpVerify.Throw, FtpError.Throw, cancellationToken);
-
-                                Log($"Downloaded {downloadedCount} files in Batch {batchNum} to {currentFolderLocal}");
-                            }
-                        }
-
-                        client.Disconnect();
-                    }
-                });
-            }
-        }
-
-
-        public static IEnumerable<IEnumerable<T>> Chunk<T>(IEnumerable<T> source, int chunksize)
-        {
-            var temp = new List<T>();
-            foreach (var item in source)
-            {
-                temp.Add(item);
-
-                if (temp.Count == chunksize)
-                {
-                    yield return temp;
-                    temp.Clear();
+                    CloudBlobClient cloudBlobClient = storageAccount.CreateCloudBlobClient();
+                    var cloudBlobContainer = cloudBlobClient.GetContainerReference(AzStorageContainerName);
+                    await cloudBlobContainer.CreateIfNotExistsAsync();
+                    CloudBlockBlob cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference(Path.GetFileName(BackupZipFile));
+                    await cloudBlockBlob.UploadFromFileAsync(BackupZipFile);
                 }
-            }
 
-            if (temp.Any())
-            {
-                yield return temp;
-            }
-        }
-
-        public void Log(string message, SeverityLevel sev = SeverityLevel.Information)
-        {
-            Console.Write(message);
-
-            if (_telemetryClient != null)
-            {
-                _telemetryClient.TrackTrace(message, sev, new Dictionary<string, string>()
-                {
-                    {"Run", _run },
-                    {"Backup", BackupFile}
-                });
-            }
-        }
-
-        public void Log(Exception ex)
-        {
-            Console.WriteLine($"ERROR: {ex.Message}");
-
-            if (_telemetryClient != null)
-            {
-                _telemetryClient.TrackException(ex, new Dictionary<string, string>()
-                {
-                    {"Run", _run },
-                    {"Backup", BackupFile}
-                });
+                Logger.Log($"Finished Azure Upload!");
             }
         }
 
