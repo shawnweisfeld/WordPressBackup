@@ -27,6 +27,7 @@ namespace WordPressBackup
             Logger = log;
             FolderLimit = folderLimit;
             DownloadChunkFileCount = downloadChunkFileCount;
+            Policy = policy;
         }
 
         public async Task DownloadFolderAsync(string destFolder, string srcFolder)
