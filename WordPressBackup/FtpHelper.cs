@@ -1,5 +1,6 @@
 ﻿using FluentFTP;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -34,7 +35,8 @@ namespace WordPressBackup
         {
             // Holds a list of folders that we need to traverse
             // using a stack to eliminate recursion
-            var folders = new Stack<string>();
+            var folders = new ConcurrentStack<string>();
+            var toDownload = new ConcurrentQueue<DownloadFileGroup>();
 
             int foldersProcesed = 0;
             var remotelen = srcFolder.Length;
@@ -46,11 +48,12 @@ namespace WordPressBackup
             // Push the root folder onto the stack
             folders.Push(srcFolder);
 
+            string currentFolderRemote = string.Empty;
+
             // Start looping.
-            while (folders.Count > 0 && foldersProcesed < FolderLimit)
+            while (folders.TryPop(out currentFolderRemote) && foldersProcesed < FolderLimit)
             {
                 foldersProcesed++;
-                var currentFolderRemote = folders.Pop();
                 var currentFolderLocal = destFolder + currentFolderRemote.Substring(remotelen);
 
                 var filesInRemote = new List<string>();
@@ -93,9 +96,8 @@ namespace WordPressBackup
                             {
                                 batchNum++;
 
-                                var downloadedCount = await client.DownloadFilesAsync(currentFolderLocal, chunk);
+                                toDownload.Enqueue(new DownloadFileGroup() {BatchNum = batchNum, DestFolder = currentFolderLocal, SrcFiles = chunk });
 
-                                Logger.Log($"Downloaded {downloadedCount} files in Batch {batchNum} to {currentFolderLocal}");
                             }
                         }
 
@@ -103,6 +105,29 @@ namespace WordPressBackup
                     }
                 });
             }
+
+            //Finished scanning all the folders, now process all the files
+
+            DownloadFileGroup dfg = null;
+
+            while (toDownload.TryDequeue(out dfg))
+            {
+                await Policy.PolicyAsync().ExecuteAsync(async () =>
+                {
+                    // FTP into the server and get a list of all the files and folders that exist
+                    using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
+                    {
+                        await client.ConnectAsync();
+
+                        var downloadedCount = await client.DownloadFilesAsync(dfg.DestFolder, dfg.SrcFiles);
+
+                        Logger.Log($"Downloaded {downloadedCount} files in Batch {dfg.BatchNum} to {dfg.DestFolder}");
+
+                        await client.DisconnectAsync();
+                    }
+                });
+            }
+
         }
 
         private static IEnumerable<IEnumerable<T>> Chunk<T>(IEnumerable<T> source, int chunksize)
