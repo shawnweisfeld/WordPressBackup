@@ -57,8 +57,6 @@ namespace WordPressBackup
                 var currentFolderLocal = destFolder + currentFolderRemote.Substring(remotelen);
 
                 var filesInRemote = new List<string>();
-                var sw = new Stopwatch();
-                sw.Start();
 
                 // Create the local clone of a sub folder if needed
                 if (!Directory.Exists(currentFolderLocal))
