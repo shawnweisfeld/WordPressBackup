@@ -16,11 +16,11 @@ namespace WordPressBackup
             Logger = logger;
         }
 
-        public Policy PolicyAsync()
+        public Policy GetDefaultPolicy()
         {
-            return Policy.WrapAsync(Policy
+            return Policy.Wrap(Policy
                   .Handle<Exception>()
-                  .WaitAndRetryAsync(
+                  .WaitAndRetry(
                       RetryCount,
                       (retryCount, timespan) => TimeSpan.FromSeconds(Math.Pow(2, retryCount)),
                       (exception, timeSpan, retryCount, context) =>
@@ -28,7 +28,7 @@ namespace WordPressBackup
                           Logger.Log($"Retry {retryCount} : {exception.Message}");
                           Logger.Log(exception);
                       }),
-                  Policy.TimeoutAsync(300));
+                  Policy.Timeout(300));
         }
 
     }

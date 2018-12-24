@@ -31,7 +31,7 @@ namespace WordPressBackup
             Policy = policy;
         }
 
-        public async Task DownloadFolderAsync(string destFolder, string srcFolder)
+        public void DownloadFolder(string destFolder, string srcFolder)
         {
             // Holds a list of folders that we need to traverse
             // using a stack to eliminate recursion
@@ -63,14 +63,14 @@ namespace WordPressBackup
 
                 Logger.Log($"Processing {currentFolderRemote}");
 
-                await Policy.PolicyAsync().ExecuteAsync(async () =>
+                Policy.GetDefaultPolicy().Execute(() =>
                 {
                     // FTP into the server and get a list of all the files and folders that exist
                     using (FtpClient client = new FtpClient(FtpHost, FtpUser, FtpPassword))
                     {
-                        await client.ConnectAsync();
+                        client.Connect();
 
-                        foreach (var item in await client.GetListingAsync(currentFolderRemote))
+                        foreach (var item in client.GetListing(currentFolderRemote))
                         {
                             if (item.Type == FtpFileSystemObjectType.Directory)
                             {
@@ -92,13 +92,13 @@ namespace WordPressBackup
                             {
                                 batchNum++;
 
-                                var downloadedCount = await client.DownloadFilesAsync(currentFolderLocal, chunk);
+                                var downloadedCount = client.DownloadFiles(currentFolderLocal, chunk);
 
                                 Logger.Log($"Downloaded {downloadedCount} files in Batch {batchNum} to {currentFolderLocal}");
                             }
                         }
 
-                        await client.DisconnectAsync();
+                        client.Disconnect();
                     }
                 });
             }

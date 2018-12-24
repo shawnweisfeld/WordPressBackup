@@ -255,7 +255,7 @@ namespace WordPressBackup
                 {
                     var policy = new PolicyHelper(Retrys, Logger);
                     var ftpHelper = new FtpHelper(FtpHost, FtpUser, FtpPassword, Logger, policy, FoldersToProcess, 10);
-                    await ftpHelper.DownloadFolderAsync(FtpLocal, FtpRemote);
+                    ftpHelper.DownloadFolder(FtpLocal, FtpRemote);
 
                     BackupDatabase();
                     ZipBackup();
