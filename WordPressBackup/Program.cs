@@ -1,11 +1,9 @@
-﻿using FluentFTP;
+﻿using Azure.Storage.Blobs;
+using FluentFTP;
 using McMaster.Extensions.CommandLineUtils;
 using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.DataContracts;
 using Microsoft.ApplicationInsights.Extensibility;
-using Microsoft.WindowsAzure.Storage;
-using Microsoft.WindowsAzure.Storage.Auth;
-using Microsoft.WindowsAzure.Storage.Blob;
 using MySql.Data.MySqlClient;
 using Polly;
 using System;
@@ -259,7 +257,7 @@ namespace WordPressBackup
 
                     BackupDatabase();
                     ZipBackup();
-                    await UploadToAzure();
+                    UploadToAzure(policy);
                 }
                 catch (Exception ex)
                 {
@@ -336,24 +334,24 @@ namespace WordPressBackup
             Logger.Log($"Database Backup Complete!");
         }
 
-        private async Task UploadToAzure()
+        private void UploadToAzure(PolicyHelper policy)
         {
             if (!string.IsNullOrEmpty(AzStorageConnectionString)
                && !string.IsNullOrEmpty(AzStorageContainerName))
             {
-                Logger.Log($"Starting Azure Upload!");
-                CloudStorageAccount storageAccount = null;
 
-                if (CloudStorageAccount.TryParse(AzStorageConnectionString, out storageAccount))
+                policy.GetDefaultPolicy().Execute(() =>
                 {
-                    CloudBlobClient cloudBlobClient = storageAccount.CreateCloudBlobClient();
-                    var cloudBlobContainer = cloudBlobClient.GetContainerReference(AzStorageContainerName);
-                    await cloudBlobContainer.CreateIfNotExistsAsync();
-                    CloudBlockBlob cloudBlockBlob = cloudBlobContainer.GetBlockBlobReference(Path.GetFileName(BackupZipFile));
-                    await cloudBlockBlob.UploadFromFileAsync(BackupZipFile);
-                }
+                    Logger.Log($"Starting Azure Upload!");
 
-                Logger.Log($"Finished Azure Upload!");
+                    var blobServiceClient = new BlobServiceClient(AzStorageConnectionString);
+                    var containerClient = blobServiceClient.GetBlobContainerClient(AzStorageContainerName);
+                    containerClient.CreateIfNotExists();
+                    var blobClient = containerClient.GetBlobClient(Path.GetFileName(BackupZipFile));
+                    blobClient.Upload(BackupZipFile, true);
+
+                    Logger.Log($"Finished Azure Upload!");
+                });
             }
         }
 

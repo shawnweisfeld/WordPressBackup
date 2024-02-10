@@ -72,13 +72,13 @@ namespace WordPressBackup
 
                         foreach (var item in client.GetListing(currentFolderRemote))
                         {
-                            if (item.Type == FtpFileSystemObjectType.Directory)
+                            if (item.Type == FtpObjectType.Directory)
                             {
                                 //Send folders to get processed in this thread
                                 if (!folders.Contains(item.FullName))
                                     folders.Push(item.FullName);
                             }
-                            else if (item.Type == FtpFileSystemObjectType.File)
+                            else if (item.Type == FtpObjectType.File)
                             {
                                 //Build a list of files in this folder
                                 filesInRemote.Add(item.FullName);
